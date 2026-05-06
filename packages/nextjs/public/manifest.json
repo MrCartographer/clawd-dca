@@ -1,5 +1,5 @@
 {
-  "name": "Scaffold-ETH 2 DApp",
-  "description": "A DApp built with Scaffold-ETH",
-  "iconPath": "logo.svg"
+  "name": "CLAWD DCA Engine",
+  "description": "Stack CLAWD on autopilot. Permissionless dollar-cost-averaging on Base.",
+  "iconPath": "icon.svg"
 }

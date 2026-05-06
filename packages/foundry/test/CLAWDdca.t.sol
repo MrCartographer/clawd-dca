@@ -685,6 +685,180 @@ contract CLAWDdcaTest is Test {
         dca.setSwapPath(newPath);
     }
 
+    function test_SetSwapPath_RevertsBadStartToken() public {
+        // 43 bytes: <random>(20) + fee(3) + CLAWD(20) — starts with non-USDC.
+        bytes memory bad = abi.encodePacked(address(0xDEAD), uint24(3000), CLAWD_ADDR);
+        assertEq(bad.length, 43);
+        vm.prank(OWNER);
+        vm.expectRevert(CLAWDdca.InvalidPath.selector);
+        dca.setSwapPath(bad);
+    }
+
+    function test_SetSwapPath_RevertsBadEndToken() public {
+        // 43 bytes: USDC(20) + fee(3) + <random>(20) — ends with non-CLAWD.
+        bytes memory bad = abi.encodePacked(USDC_ADDR, uint24(3000), address(0xDEAD));
+        assertEq(bad.length, 43);
+        vm.prank(OWNER);
+        vm.expectRevert(CLAWDdca.InvalidPath.selector);
+        dca.setSwapPath(bad);
+    }
+
+    function test_SetSwapPath_RevertsBadLength44() public {
+        // 44 bytes — does not match (length - 20) % 23 == 0.
+        bytes memory bad = new bytes(44);
+        // Patch front and back so it would otherwise look valid.
+        for (uint256 i = 0; i < 20; i++) bad[i] = bytes20(uint160(USDC_ADDR))[i];
+        for (uint256 i = 0; i < 20; i++) bad[i + 24] = bytes20(uint160(CLAWD_ADDR))[i];
+        vm.prank(OWNER);
+        vm.expectRevert(CLAWDdca.InvalidPath.selector);
+        dca.setSwapPath(bad);
+    }
+
+    function test_SetSwapPath_AcceptsSingleHopUsdcToClawd() public {
+        // 43 bytes — valid single hop USDC → CLAWD direct.
+        bytes memory newPath = abi.encodePacked(USDC_ADDR, uint24(3000), CLAWD_ADDR);
+        assertEq(newPath.length, 43);
+        vm.prank(OWNER);
+        dca.setSwapPath(newPath);
+        assertEq(dca.swapPath(), newPath);
+    }
+
+    function test_SetSwapPath_AcceptsMultiHopUsdcWethClawd() public {
+        // 66 bytes — valid two-hop USDC → WETH → CLAWD.
+        bytes memory newPath =
+            abi.encodePacked(USDC_ADDR, uint24(500), address(0x4200000000000000000000000000000000000006), uint24(10_000), CLAWD_ADDR);
+        assertEq(newPath.length, 66);
+        vm.prank(OWNER);
+        dca.setSwapPath(newPath);
+        assertEq(dca.swapPath(), newPath);
+    }
+
+    // -------------------------------------------------------------------------
+    // renounceOwnership override
+    // -------------------------------------------------------------------------
+
+    function test_RenounceOwnership_RevertsForOwner() public {
+        // Owner calls renounceOwnership — must hit the override and revert with the custom error,
+        // NOT actually transfer ownership to the zero address.
+        vm.prank(OWNER);
+        vm.expectRevert(CLAWDdca.OwnershipCannotBeRenounced.selector);
+        dca.renounceOwnership();
+
+        // Owner is unchanged.
+        assertEq(dca.owner(), OWNER);
+    }
+
+    function test_RenounceOwnership_RevertsForNonOwner() public {
+        // Non-owner cannot even reach the override body — Ownable's onlyOwner check fires first.
+        vm.prank(BOB);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, BOB));
+        dca.renounceOwnership();
+
+        assertEq(dca.owner(), OWNER);
+    }
+
+    // -------------------------------------------------------------------------
+    // executeDCAWithMin (off-chain quote keeper path)
+    // -------------------------------------------------------------------------
+
+    function test_ExecuteDCAWithMin_Happy() public {
+        uint256 id = _createPosition(ALICE, 1000e6, 100e6, 1);
+
+        uint256 swapAmount = 100e6;
+        uint256 keeperFee = (swapAmount * 39) / 10_000;
+        uint256 protocolFee = (swapAmount * 30) / 10_000;
+        uint256 swapInput = swapAmount - keeperFee - protocolFee;
+        uint256 expectedOut = (swapInput * RATE_NUM) / RATE_DENOM;
+
+        // Keeper supplies amountOutMinimum directly. Use 95% of expectedOut as a 5% slippage tolerance.
+        uint256 keeperMinOut = (expectedOut * 9500) / 10_000;
+
+        uint256 keeperUsdcBefore = IERC20(USDC_ADDR).balanceOf(KEEPER);
+
+        vm.prank(KEEPER);
+        dca.executeDCAWithMin(id, keeperMinOut);
+
+        // Keeper got the keeper fee in USDC.
+        assertEq(IERC20(USDC_ADDR).balanceOf(KEEPER) - keeperUsdcBefore, keeperFee);
+
+        // Position state advanced.
+        (, uint256 usdcBalance, uint256 clawdAccrued,,, uint256 lastEpoch,,) = _readPosition(id);
+        assertEq(usdcBalance, 1000e6 - swapAmount);
+        assertEq(clawdAccrued, expectedOut);
+        assertEq(lastEpoch, dca.currentEpoch());
+        assertEq(dca.protocolFeeBalance(), protocolFee);
+    }
+
+    function test_ExecuteDCAWithMin_RevertsBelowSuppliedMin() public {
+        uint256 id = _createPosition(ALICE, 1000e6, 100e6, 1);
+
+        uint256 swapAmount = 100e6;
+        uint256 keeperFee = (swapAmount * 39) / 10_000;
+        uint256 protocolFee = (swapAmount * 30) / 10_000;
+        uint256 swapInput = swapAmount - keeperFee - protocolFee;
+        uint256 expectedOut = (swapInput * RATE_NUM) / RATE_DENOM;
+
+        // Force the router to deliver less than the keeper's supplied minimum.
+        uint256 keeperMinOut = expectedOut; // demand exactly the full quote
+        MockSwapRouter(ROUTER_ADDR).setForceOutput(keeperMinOut - 1);
+
+        vm.prank(KEEPER);
+        vm.expectRevert(bytes("Too little received"));
+        dca.executeDCAWithMin(id, keeperMinOut);
+    }
+
+    function test_ExecuteDCAWithMin_RevertsWhenPaused() public {
+        uint256 id = _createPosition(ALICE, 1000e6, 100e6, 1);
+        vm.prank(OWNER);
+        dca.pause();
+
+        vm.prank(KEEPER);
+        vm.expectRevert(Pausable.EnforcedPause.selector);
+        dca.executeDCAWithMin(id, 0);
+    }
+
+    function test_ExecuteDCAWithMin_NotRipe() public {
+        // Create a position with a 2-epoch interval, execute once to consume immediate ripeness,
+        // then attempt with executeDCAWithMin and expect NotRipe.
+        uint256 id = _createPosition(ALICE, 1000e6, 100e6, 2);
+        vm.prank(KEEPER);
+        dca.executeDCA(id);
+
+        vm.prank(KEEPER);
+        vm.expectRevert(CLAWDdca.NotRipe.selector);
+        dca.executeDCAWithMin(id, 0);
+    }
+
+    function test_ExecuteDCAWithMin_ZeroMinAcceptsAnyOutput() public {
+        // amountOutMinimum = 0 means router can return any amount including 1 wei. The keeper-supplied
+        // path is the user's responsibility — this test confirms zero is accepted (sandwich risk explicit).
+        uint256 id = _createPosition(ALICE, 1000e6, 100e6, 1);
+
+        // Force router to return only 1 wei of CLAWD.
+        MockSwapRouter(ROUTER_ADDR).setForceOutput(1);
+
+        vm.prank(KEEPER);
+        dca.executeDCAWithMin(id, 0);
+
+        (,, uint256 clawdAccrued,,,,,) = _readPosition(id);
+        assertEq(clawdAccrued, 1);
+    }
+
+    // -------------------------------------------------------------------------
+    // closePosition double-close (Low-2)
+    // -------------------------------------------------------------------------
+
+    function test_ClosePosition_RevertsWhenAlreadyClosed() public {
+        uint256 id = _createPosition(ALICE, 1000e6, 100e6, 1);
+        vm.prank(ALICE);
+        dca.closePosition(id);
+
+        // Re-closing must revert PositionInactive (no double PositionClosed event).
+        vm.prank(ALICE);
+        vm.expectRevert(CLAWDdca.PositionInactive.selector);
+        dca.closePosition(id);
+    }
+
     // -------------------------------------------------------------------------
     // pause / unpause
     // -------------------------------------------------------------------------

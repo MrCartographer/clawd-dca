@@ -40,8 +40,18 @@ interface IQuoterV2 {
  *         the swap once a position is ripe, the contract pays the keeper and a protocol fee, swaps the
  *         remainder for CLAWD via Uniswap V3, and credits CLAWD to the position. Owner withdraws CLAWD
  *         or closes the position at any time. Pausable; withdrawals stay open while paused.
- * @dev Hardcoded to the Base mainnet token + router addresses listed below. Slippage protection uses
- *      Uniswap V3 QuoterV2 — no oracle dependency.
+ * @dev Hardcoded to the Base mainnet token + router addresses listed below. Two keeper entrypoints:
+ *      - `executeDCAWithMin(positionId, amountOutMinimum)` — production-safe path. The keeper computes
+ *        `amountOutMinimum` off-chain (e.g. via a static QuoterV2 call from the keeper UI / RPC) and
+ *        passes it in. The contract enforces it directly through SwapRouter02. This is sandwich-resistant
+ *        because the minimum is fixed at quote time, not derived from same-block pool state.
+ *      - `executeDCA(positionId)` — best-effort convenience. Calls QuoterV2 in the same transaction and
+ *        applies `position.slippageBps`. NOTE: A same-block QuoterV2 quote does NOT protect against
+ *        sandwich MEV — a sufficiently funded attacker can manipulate the pool between the quote and the
+ *        swap in the same block. The keeper UI should default to `executeDCAWithMin`. Use `executeDCA`
+ *        only as a fallback or for low-value testnet flows.
+ *      For production deployment, prefer off-chain quoting (the keeper passes `amountOutMinimum`) or a
+ *      TWAP oracle. The on-chain QuoterV2 quote is a documented best-effort limitation.
  */
 contract CLAWDdca is Ownable2Step, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -92,6 +102,8 @@ contract CLAWDdca is Ownable2Step, Pausable, ReentrancyGuard {
     }
 
     mapping(uint256 => Position) public positions;
+    /// @notice Append-only list of position ids per owner. Closed positions are NOT removed; consumers
+    ///         must filter by `positions[id].active` (or use `getRipePositions`) for the live set.
     mapping(address => uint256[]) public positionsByOwner;
     uint256 public nextPositionId; // monotonic, starts at 1
     uint256 public protocolFeeBalance; // USDC fee accrual, withdrawable by owner
@@ -133,6 +145,7 @@ contract CLAWDdca is Ownable2Step, Pausable, ReentrancyGuard {
     error SlippageTooHigh();
     error InvalidPath();
     error ZeroAddress();
+    error OwnershipCannotBeRenounced();
 
     // ---------------------------------------------------------------------------------------------
     // Constructor
@@ -141,10 +154,14 @@ contract CLAWDdca is Ownable2Step, Pausable, ReentrancyGuard {
     /// @param initialOwner The job client — receives ownership.
     constructor(address initialOwner) Ownable(initialOwner) {
         if (initialOwner == address(0)) revert ZeroAddress();
-        // USDC -> WETH (0.05%) -> CLAWD (1%)
-        swapPath = abi.encodePacked(USDC, uint24(500), WETH, uint24(10_000), CLAWD);
+        // USDC -> WETH (0.05%) -> CLAWD (1%). Two hops: 20 + 3 + 20 + 3 + 20 = 66 bytes.
+        bytes memory path = abi.encodePacked(USDC, uint24(500), WETH, uint24(10_000), CLAWD);
+        // Defense-in-depth: confirm the structural length check used by setSwapPath also passes here.
+        // For a USDC-prefixed, CLAWD-suffixed path built from the constants above, this is always true.
+        require(path.length >= 43 && (path.length - 20) % 23 == 0, "bad init path");
+        swapPath = path;
         nextPositionId = 1;
-        emit SwapPathUpdated(swapPath);
+        emit SwapPathUpdated(path);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -223,10 +240,12 @@ contract CLAWDdca is Ownable2Step, Pausable, ReentrancyGuard {
     }
 
     /// @notice Close a position and return any remaining USDC + accrued CLAWD. Allowed even when paused.
+    /// @dev Reverts if the position is already closed so indexers don't see a duplicate `PositionClosed`.
     function closePosition(uint256 positionId) external nonReentrant {
         Position storage p = positions[positionId];
         if (p.owner == address(0)) revert PositionNotFound();
         if (p.owner != msg.sender) revert NotPositionOwner();
+        if (!p.active) revert PositionInactive();
 
         uint256 usdcAmount = p.usdcBalance;
         uint256 clawdAmount = p.clawdAccrued;
@@ -259,17 +278,34 @@ contract CLAWDdca is Ownable2Step, Pausable, ReentrancyGuard {
     // ---------------------------------------------------------------------------------------------
 
     /**
-     * @notice Trigger a DCA swap for a single ripe position. Caller (keeper) earns 0.39% of `amountPerSwap`.
+     * @notice Trigger a DCA swap for a single ripe position using on-chain QuoterV2 for slippage. Best-effort
+     *         only — does NOT protect against same-block sandwich MEV. Prefer `executeDCAWithMin` in production.
      * @dev CEI ordering: state updated (balance, epoch, fees) before any external call.
      */
     function executeDCA(uint256 positionId) external whenNotPaused nonReentrant {
-        _executeDCA(positionId);
+        _executeDCA(positionId, 0, true);
     }
 
     /**
-     * @notice Trigger DCA across many positions. Skips silently if a position is inactive, has zero balance,
-     *         or is not ripe. If the swap itself reverts (e.g. slippage), the whole batch reverts — the
-     *         caller is expected to filter the input list using `getRipePositions` first.
+     * @notice Trigger a DCA swap with a keeper-supplied `amountOutMinimum`. This is the production-safe path:
+     *         the keeper computes `amountOutMinimum` off-chain (e.g. by calling QuoterV2 from a static RPC
+     *         provider or by reading a TWAP) and the contract enforces it directly. Sandwich-resistant
+     *         because the minimum is fixed at the time the keeper builds the transaction.
+     * @param positionId The position to execute.
+     * @param amountOutMinimum The minimum CLAWD output the swap must produce, computed off-chain. The router
+     *                        will revert if the actual output is below this. Set to 0 to disable on-chain
+     *                        slippage protection (NOT recommended).
+     */
+    function executeDCAWithMin(uint256 positionId, uint256 amountOutMinimum) external whenNotPaused nonReentrant {
+        _executeDCA(positionId, amountOutMinimum, false);
+    }
+
+    /**
+     * @notice Trigger DCA across many positions using on-chain QuoterV2 for slippage. Skips silently if a
+     *         position is inactive, has zero balance, or is not ripe. If the swap itself reverts (e.g.
+     *         slippage), the whole batch reverts — caller should pre-filter via `getRipePositions`.
+     * @dev Like `executeDCA`, this uses on-chain QuoterV2 and is NOT sandwich-resistant. For production
+     *      keepers, batch by calling `executeDCAWithMin` per-position with off-chain quotes.
      */
     function executeBatch(uint256[] calldata positionIds) external whenNotPaused nonReentrant {
         uint256 currentEpoch_ = currentEpoch();
@@ -279,12 +315,18 @@ contract CLAWDdca is Ownable2Step, Pausable, ReentrancyGuard {
             if (!p.active) continue;
             if (p.usdcBalance == 0) continue;
             if (currentEpoch_ < p.lastExecutedEpoch + p.intervalInEpochs) continue;
-            _executeDCA(positionId);
+            _executeDCA(positionId, 0, true);
         }
     }
 
-    /// @dev Shared DCA execution body.
-    function _executeDCA(uint256 positionId) internal {
+    /**
+     * @dev Shared DCA execution body.
+     * @param positionId The position to execute.
+     * @param suppliedMin Keeper-supplied amountOutMinimum (only used when useQuoter == false).
+     * @param useQuoter If true, fetch a same-block QuoterV2 quote and apply position.slippageBps; if false,
+     *                  use `suppliedMin` directly as the router's `amountOutMinimum`.
+     */
+    function _executeDCA(uint256 positionId, uint256 suppliedMin, bool useQuoter) internal {
         Position storage p = positions[positionId];
         if (!p.active) revert PositionInactive();
         if (p.usdcBalance == 0) revert ZeroAmount();
@@ -307,13 +349,17 @@ contract CLAWDdca is Ownable2Step, Pausable, ReentrancyGuard {
         // Pay keeper their fee in USDC.
         if (keeperFee > 0) IERC20(USDC).safeTransfer(msg.sender, keeperFee);
 
-        // Quote expected output to compute slippage floor.
-        // QuoterV2.quoteExactInput is state-mutating-then-revert; calling it from a non-view context costs gas.
-        uint256 expectedOut;
-        {
+        uint256 amountOutMinimum;
+        if (useQuoter) {
+            // Best-effort same-block quote. NOT sandwich-resistant — see contract docstring.
+            // QuoterV2.quoteExactInput is state-mutating-then-revert; calling from non-view costs gas.
+            uint256 expectedOut;
             (expectedOut,,,) = IQuoterV2(QUOTER).quoteExactInput(swapPath, swapInput);
+            amountOutMinimum = (expectedOut * (BPS_DENOMINATOR - slippageBps_)) / BPS_DENOMINATOR;
+        } else {
+            // Keeper-supplied minimum, fixed at quote time off-chain.
+            amountOutMinimum = suppliedMin;
         }
-        uint256 amountOutMinimum = (expectedOut * (BPS_DENOMINATOR - slippageBps_)) / BPS_DENOMINATOR;
 
         // Approve router for exactly swapInput.
         IERC20(USDC).forceApprove(SWAP_ROUTER, swapInput);
@@ -347,12 +393,22 @@ contract CLAWDdca is Ownable2Step, Pausable, ReentrancyGuard {
         emit ProtocolFeesCollected(amount);
     }
 
-    /// @notice Update the Uniswap V3 swap path (e.g. to skip WETH if a direct USDC/CLAWD pool exists).
-    /// @dev Single-hop is 43 bytes (20 + 3 + 20). Multi-hop is longer (each extra hop adds 23 bytes).
+    /// @notice Update the Uniswap V3 swap path. Must start with USDC and end with CLAWD; intermediate
+    ///         hops and fee tiers are flexible.
+    /// @dev Single-hop is 43 bytes (20 + 3 + 20). Multi-hop adds 23 bytes per additional hop. The
+    ///      length-structure check enforces `(length - 20) % 23 == 0`, which is equivalent to
+    ///      `length ∈ {43, 66, 89, ...}`.
     function setSwapPath(bytes calldata newPath) external onlyOwner {
-        if (newPath.length < 43) revert InvalidPath();
+        _validateSwapPath(newPath);
         swapPath = newPath;
         emit SwapPathUpdated(newPath);
+    }
+
+    /// @notice `renounceOwnership` is permanently disabled to prevent the contract from being orphaned
+    ///         in a state where `pause`, `setSwapPath`, and `collectProtocolFees` are bricked forever.
+    ///         Use `transferOwnership` + `acceptOwnership` (Ownable2Step) to rotate ownership.
+    function renounceOwnership() public view override onlyOwner {
+        revert OwnershipCannotBeRenounced();
     }
 
     function pause() external onlyOwner {
@@ -361,6 +417,28 @@ contract CLAWDdca is Ownable2Step, Pausable, ReentrancyGuard {
 
     function unpause() external onlyOwner {
         _unpause();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Internal helpers
+    // ---------------------------------------------------------------------------------------------
+
+    /// @dev Enforces that a Uniswap V3 swap path begins with `USDC` (input) and ends with `CLAWD` (output),
+    ///      and that the byte length matches a valid hop pattern (`(length - 20) % 23 == 0`, with a
+    ///      minimum of 43 for a single hop).
+    function _validateSwapPath(bytes calldata newPath) internal pure {
+        if (newPath.length < 43) revert InvalidPath();
+        if ((newPath.length - 20) % 23 != 0) revert InvalidPath();
+        address pathStart;
+        address pathEnd;
+        assembly {
+            // First 20 bytes of calldata path = input token.
+            pathStart := shr(96, calldataload(newPath.offset))
+            // Last 20 bytes of calldata path = output token.
+            pathEnd := shr(96, calldataload(add(newPath.offset, sub(newPath.length, 20))))
+        }
+        if (pathStart != USDC) revert InvalidPath();
+        if (pathEnd != CLAWD) revert InvalidPath();
     }
 
     // ---------------------------------------------------------------------------------------------

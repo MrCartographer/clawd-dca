@@ -358,3 +358,97 @@ After those, address Low-1 / Low-2 (cheap quality improvements), and consider th
 ---
 
 *End of Stage 3 audit.*
+
+---
+
+# Stage 4 Resolution
+
+**Resolution commit follows Stage 3 commit `3cfa26e`. Tests: 45 → 58 (added 13 covering new behavior). `forge build` exit 0; `forge test -vv` 58/58 pass.**
+
+## Mediums
+
+### [Medium-1] `renounceOwnership` not overridden — **FIXED**
+- Added custom error `OwnershipCannotBeRenounced()` (`CLAWDdca.sol:144`).
+- Overrode `Ownable.renounceOwnership()` to revert (`CLAWDdca.sol:391-393`):
+  ```solidity
+  function renounceOwnership() public view override onlyOwner {
+      revert OwnershipCannotBeRenounced();
+  }
+  ```
+- Tests added (`CLAWDdca.t.sol`): `test_RenounceOwnership_RevertsForOwner` (owner gets `OwnershipCannotBeRenounced`, owner unchanged), `test_RenounceOwnership_RevertsForNonOwner` (non-owner gets `OwnableUnauthorizedAccount` from `onlyOwner` before reaching the revert body).
+- Closes GitHub issue #1.
+
+### [Medium-2] JIT QuoterV2 slippage is sandwichable — **FIXED (Option B)**
+- Chose **Option B**: added `executeDCAWithMin(uint256 positionId, uint256 amountOutMinimum)` (`CLAWDdca.sol:299-301`) as a production-safe entrypoint where the keeper supplies an off-chain-computed minimum. Kept `executeDCA(positionId)` as the best-effort QuoterV2 path. Both call a refactored shared internal `_executeDCA(positionId, suppliedMin, useQuoter)`.
+- Updated the contract NatSpec (`CLAWDdca.sol:37-54`) to clearly state that the same-block QuoterV2 quote is best-effort only and is NOT sandwich-resistant; explicitly directs production keepers to use `executeDCAWithMin`. Also added a NatSpec note on `executeDCA` and on `executeBatch` clarifying their best-effort status.
+- `executeBatch` continues to use the QuoterV2 path because batched off-chain quotes per-position are a keeper-orchestration concern; the docstring now flags this.
+- Tests added: `test_ExecuteDCAWithMin_Happy`, `test_ExecuteDCAWithMin_RevertsBelowSuppliedMin`, `test_ExecuteDCAWithMin_RevertsWhenPaused`, `test_ExecuteDCAWithMin_NotRipe`, `test_ExecuteDCAWithMin_ZeroMinAcceptsAnyOutput` (last one documents that `0` minimum is permitted but discouraged).
+- Closes GitHub issue #2.
+
+### [Medium-3] `setSwapPath` token-endpoint validation — **FIXED**
+- Added `_validateSwapPath(bytes calldata)` helper (`CLAWDdca.sol:407-422`) that enforces:
+  - `length >= 43` (single-hop minimum).
+  - `(length - 20) % 23 == 0` (valid Uniswap V3 hop pattern: `token(20) + (fee(3) + token(20))^N`).
+  - First 20 bytes equal `USDC`.
+  - Last 20 bytes equal `CLAWD`.
+- All four checks revert with `InvalidPath`. The first/last token reads use a small `assembly` block on `calldataload(newPath.offset)` and `calldataload(add(newPath.offset, sub(newPath.length, 20)))`, with `shr(96, ...)` to right-align the 20-byte address (verified against the Solidity calldata layout for `bytes calldata`).
+- `setSwapPath` (`CLAWDdca.sol:357-361`) calls `_validateSwapPath` before storing and emitting.
+- Constructor (`CLAWDdca.sol:152-161`) confirms its built-in path passes the same length-structure check via a `require`. The endpoint check would also pass by construction (the encoded path begins with `USDC` and ends with `CLAWD`); the structural length check is the only one we re-run for defense-in-depth without duplicating address-comparison logic for `bytes memory`.
+- Tests added: `test_SetSwapPath_RevertsBadStartToken`, `test_SetSwapPath_RevertsBadEndToken`, `test_SetSwapPath_RevertsBadLength44`, `test_SetSwapPath_AcceptsSingleHopUsdcToClawd` (43 bytes), `test_SetSwapPath_AcceptsMultiHopUsdcWethClawd` (66 bytes). The pre-existing `test_SetSwapPath_RevertsTooShort` (42 bytes) and `test_SetSwapPath_Happy` (single-hop USDC→CLAWD) continue to pass.
+- Closes GitHub issue #3. No optional `sweep(address)` was added — the audit flagged it as out-of-scope for a prototype, and sweep introduces its own surface area; deferring.
+
+## Lows
+
+### [Low-1] `positionsByOwner` append-only — **DOCUMENTED**
+- Added a NatSpec comment on the storage slot (`CLAWDdca.sol:99-101`) telling consumers to filter by `positions[id].active`.
+- No structural change. Adding swap-and-pop on `closePosition` would change closed-position iteration order off-chain and is a UX call best made when the keeper UI is built.
+
+### [Low-2] `closePosition` double-close emits misleading event — **FIXED**
+- Added `if (!p.active) revert PositionInactive();` in `closePosition` (`CLAWDdca.sol:233`).
+- Test added: `test_ClosePosition_RevertsWhenAlreadyClosed`. No other tests broke (closes everywhere else only happen once on each id).
+
+### [Low-3] Reentrancy test weakened by mock swallowing inner call — **WON'T-FIX (deferred)**
+- The audit explicitly notes "this is test polish, not a contract bug." `nonReentrant` is on every external state-changing entry point and is verified across the suite. The cost of refactoring `MockSwapRouter` to bubble revert reasons (or adding a second test path through `withdrawCLAWD`) is non-trivial relative to the current 58-test coverage.
+- Documenting as deferred per Stage 4 scope. Worth picking up if a future audit finds an actual reentrancy gap.
+
+### [Low-4] `executeBatch` / `getRipePositions` unbounded loops — **DOCUMENTED**
+- The audit's recommendation was to document, which the existing NatSpec on `executeBatch` already does ("caller is expected to filter the input list using `getRipePositions` first"). Stage 4 strengthened the NatSpec further to call out that `executeBatch` uses on-chain QuoterV2 (best-effort).
+- No code change. Caller pays gas; not an exploit vector.
+
+## Infos
+
+### [Info-1] `setSwapPath` no timelock — **WON'T-FIX (out of scope per spec)**
+- Spec acknowledges this; Stage 4 Medium-3 fix narrowed the surface to "owner can pick any USDC→…→CLAWD route," eliminating the silent-misroute class.
+
+### [Info-2] `lastExecutedEpoch` first-init underflow guard — **NO ACTION**
+- Defense-in-depth retained. No regression.
+
+### [Info-3] Constructor path liveness check — **DEPLOY-TIME (Stage 5)**
+- Stage 5 will run a one-shot `quoteExactInput` against the constructor path before announcing. Out of contract scope.
+
+### [Info-4] `intervalInEpochs` unbounded — **WON'T-FIX**
+- Self-recoverable via `closePosition`. Not blocking.
+
+### [Info-5] No minimum `amountPerSwap` — **WON'T-FIX**
+- Self-policing for keepers; flexibility is intentional.
+
+### [Info-6] No `sweep(address)` — **WON'T-FIX**
+- Out of prototype scope; flagged by audit for production consideration.
+
+### [Info-7] `WETH` constant could become dead code — **NO ACTION**
+- Cosmetic.
+
+### [Info-8] Test coverage gaps — **PARTIALLY ADDRESSED**
+- Stage 4 added 13 new tests covering: renounceOwnership for owner+non-owner, swap-path endpoint validation (4 negative + 2 positive), executeDCAWithMin (5 cases), closePosition double-close. The audit's specific suggested gaps (admin-while-paused, slippageBps==0) were not added — the existing `test_WithdrawCLAWD_AllowedWhenPaused` and `test_ClosePosition_AllowedWhenPaused` cover the paused-withdrawal model, and `setSlippageTolerance(0)` is allowed by `if (bps > MAX_SLIPPAGE_BPS) revert SlippageTooHigh()` which permits zero by definition. Adding more polish tests is no longer blocking.
+
+### [Info-9] `PositionToppedUp` missing newBalance — **WON'T-FIX**
+- Event signature change has bytecode/ABI cost. Indexers can read post-state via `eth_call`. Not blocking.
+
+## Test count
+- Stage 3: 45 tests, all passing.
+- Stage 4: 58 tests (+13 new), all passing.
+
+## Build
+- `forge build` exit 0 (linter-style notes about `mixedCase` on `executeDCA` / `executeDCAWithMin` are intentional — the `DCA` acronym is part of the public API and matches the contract name).
+
+*End of Stage 4 resolution.*

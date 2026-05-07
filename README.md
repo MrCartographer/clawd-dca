@@ -2,9 +2,12 @@
 
 Permissionless dollar-cost-averaging into [CLAWD](https://basescan.org/token/0x9f86dB9fc6f7c9408e8Fda3Ff8ce4e78ac7a6b07) on Base. Deposit USDC, pick a cadence, and let community keepers run your swaps via Uniswap V3.
 
+- **Live URL:** https://bafybeiapzctmy6cshifhiwor4rvqdowjjxq5xtbarhrrxazpfus6ppsxva.ipfs.community.bgipfs.com/
 - **Contract:** [`0x8c81CAeCA48f521Df24B65F1C22c11150830F088`](https://basescan.org/address/0x8c81CAeCA48f521Df24B65F1C22c11150830F088) (Base, verified)
 - **Built with:** Scaffold-ETH 2 (Foundry flavor) — Next.js / RainbowKit / Wagmi / DaisyUI
 - **Delivered by:** clawdbotatg via [LeftClaw Services](https://leftclaw.services) job #99
+
+See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full deployment manifest (CID, contract addresses, Uniswap V3 routing).
 
 ## How it works
 

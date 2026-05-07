@@ -360,3 +360,59 @@ Covered above in Dashboard/PositionCard section. Stage 8 should either add a coa
 - **Phantom wallet actually rendering in the modal**: confirmed `phantomWallet` is imported and pushed into the wallets array, but didn't open the RainbowKit modal in a browser to verify it renders. Code path is correct.
 - **`yarn build` re-run**: out of scope per stage rules.
 - **Live Basescan verification spot-check**: deployedContracts.ts has the correct address; Stage 5 reported verification confirmed; the Footer link manually opens the Basescan page where the green checkmark would be visible.
+
+---
+
+## Stage 8 Resolution
+
+Each Stage 7 FAIL / Info item, with file:line references after fixes.
+
+### Ship-blocker #3 — Approve cooldown gap — **RESOLVED**
+
+`packages/nextjs/app/_components/CreatePosition.tsx`:
+- **Render-time refetch eliminated.** The old `if (approveConfirmed && approveTxHash) { refetchAllowance(); resetApprove(); }` at lines 191-194 (executing during render) is GONE.
+- **Replaced with `useEffect` polling pattern** (lines ~191-220 post-edit). On `approveConfirmed`, sets `approveCooldown=true` and `waitingForAllowance=true`, polls `refetchAllowance()` every 1.5s until either the cached allowance reaches `totalUsdcRaw` OR 20 attempts (~30s) elapse, then drops both flags and calls `resetApprove()`. This mirrors job 93's Stage 8 pattern.
+- **Approve button `disabled` prop expanded** (line ~410): now `!needsApproval || insufficientBalance || isApproving || approveConfirming || approveCooldown || waitingForAllowance || totalUsdcRaw === 0n`. Spinner also extended to spin during cooldown so the user sees activity.
+- **End-to-end button states:** click → wallet prompt (`isApproving=true`, disabled) → tx mining (`approveConfirming=true`, disabled) → receipt landed (`approveCooldown=true`, `waitingForAllowance=true`, disabled while polling) → cached allowance ≥ totalUsdcRaw (flags drop, `needsApproval` flips false on next render, button shows "1. USDC Approved ✓" and stays disabled because `!needsApproval` is now true).
+- **Duplicate-submission window CLOSED.** A user can no longer click Approve twice within the post-confirm window.
+
+### Should-fix #1 — Protocol contracts via `<Address/>` — **RESOLVED**
+
+`packages/nextjs/components/Footer.tsx` rewritten:
+- New `Contracts` mini-section above the disclaimer (lines ~20-37) renders three `<AddressComp>` rows for CLAWDdca, USDC, and CLAWD using `format="short"` with blockie + copy + explorer-link affordances inherited from `@scaffold-ui/components`. `chain={base}` ensures the explorer link points at Basescan.
+- Constants imported from `~~/utils/dca` (`CLAWDDCA_ADDRESS`, `USDC_ADDRESS`, `CLAWD_ADDRESS`) — single source of truth.
+- Existing Basescan link / GitHub / LeftClaw / SwitchTheme footer row preserved.
+- Component now starts with `"use client"` because `<AddressComp>` uses client-only hooks.
+- Verified `out/_next/static/chunks/app/layout-*.js` contains `"CLAWD DCA:"` literal — Contracts section is in the layout chunk and renders on every page.
+
+### Spec-conformance Should-fix Low — Position progress bar — **RESOLVED (events-based)**
+
+`packages/nextjs/components/dca/PositionCard.tsx`:
+- Added `useScaffoldEventHistory` for `DCAExecuted` and `PositionToppedUp` (filtered client-side by `positionId`).
+- Computed `totalUsdcSpent` (sum of `usdcSpent` for matching `positionId`), `executionsCompleted` (`= totalUsdcSpent / amountPerSwap`), `totalCommitted` (`= usdcBalance + totalUsdcSpent` — accounting identity covers initial deposit + all top-ups).
+- `progressPct` derived bigint-safe via basis points: `(totalUsdcSpent * 10000n) / totalCommitted` → divided by 100 → clamped 0..100.
+- Rendered as DaisyUI `<progress className="progress progress-primary w-full" value={progressPct} max={100} />` between the position-fields grid and the action buttons. Caption: `Progress: X swap(s) done, Y to go — Z%`.
+- `totalToppedUp` is computed for future granularity but not surfaced (kept the bar simple and accurate).
+
+### Info — PositionCard wrongNetwork gating — **RESOLVED**
+
+`packages/nextjs/components/dca/PositionCard.tsx`:
+- `useAccount()` destructured to also pull `chain`. Derived `wrongNetwork = chain !== undefined && chain.id !== base.id`.
+- Added `|| wrongNetwork` to the `disabled` prop of: Withdraw CLAWD, Top Up USDC (toggle), Close Position, Top Up (submit), Save Slippage. Cancel button intentionally NOT gated — user should always be able to dismiss the inline panel.
+- Now matches the four-state flow: a wrong-chain user sees the WalletStrip's "Switch to Base" button, and per-row write actions are inert until they switch.
+
+### Stage 7 PASSES — re-verified, no regressions
+
+- Ship-blockers 1, 2, 4-13: untouched files (RainbowKitCustomConnectButton, WalletStrip, Keepers, deployedContracts, getMetadata, layout, README, app/icon.svg, externalContracts, contract.ts) — no changes.
+- Should-fix 2-8: untouched (getMetadata.ts, globals.css, formatUsdc/$, getParsedErrorWithAllAbis, phantomWallet, useWriteAndOpen, appName).
+- Page-spec PASSES (Dashboard / Create / Keepers / Stats): the only edited renders are Footer (which appears on every page — adds Contracts section, no spec regression) and PositionCard (Dashboard only — adds progress bar + wrongNetwork gating, all existing fields preserved).
+- Build verification: `yarn next:build` exits 0, all 8 static pages generate, all 3 static exports complete. No lint warnings (prettier formatting applied), no TypeScript errors.
+- Static export verification: `out/index.html`, `out/create/index.html`, `out/keepers/index.html`, `out/stats/index.html` all present. All three contract addresses (CLAWDdca, USDC, CLAWD) embedded in `out/_next/static/chunks/3601-*.js`. Zero `localhost:3000` matches in user-visible HTML. `"CLAWD DCA:"` Contracts-section copy embedded in layout chunk.
+
+### Summary
+
+- **Ship-blockers: 13/13 PASS.**
+- **Should-fix: 8/8 PASS** (the previously-failed `<Address/>` for protocol contracts is now in the Footer).
+- **Page-spec: 4/4 PASS** with progress bar now satisfying the previously-Low Should-fix.
+- **Info items addressed:** render-time refetch fixed (Issue #2), PositionCard wrongNetwork gating fixed.
+- **Build:** `yarn next:build` exits 0. `out/` produced. Ready for Stage 9.

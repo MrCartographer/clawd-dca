@@ -5,9 +5,10 @@ import { Address as AddressComp } from "@scaffold-ui/components";
 import { parseUnits } from "viem";
 import { base } from "viem/chains";
 import { useAccount } from "wagmi";
-import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useScaffoldEventHistory, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useWriteAndOpen } from "~~/hooks/scaffold-eth/useWriteAndOpen";
 import {
+  DEPLOYED_ON_BLOCK,
   MAX_SLIPPAGE_BPS,
   USDC_DECIMALS,
   epochToDate,
@@ -53,7 +54,8 @@ const useNow = (intervalMs: number) => {
 };
 
 export const PositionCard = ({ positionId }: PositionCardProps) => {
-  const { address: connectedAddress } = useAccount();
+  const { address: connectedAddress, chain } = useAccount();
+  const wrongNetwork = chain !== undefined && chain.id !== base.id;
   const currentEpoch = useCurrentEpoch();
   const now = useNow(1000);
 
@@ -61,6 +63,23 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
     contractName: "CLAWDdca",
     functionName: "positions",
     args: [positionId],
+    watch: true,
+  });
+
+  // Pull DCAExecuted + PositionToppedUp history so we can derive a true
+  // progress percentage. Initial deposit isn't stored on-chain, but accounting
+  // identity gives us: total_committed = current_balance + sum(usdcSpent). The
+  // progress bar shows fraction-spent of total ever committed to this position.
+  const { data: executedEvents } = useScaffoldEventHistory({
+    contractName: "CLAWDdca",
+    eventName: "DCAExecuted",
+    fromBlock: DEPLOYED_ON_BLOCK,
+    watch: true,
+  });
+  const { data: toppedUpEvents } = useScaffoldEventHistory({
+    contractName: "CLAWDdca",
+    eventName: "PositionToppedUp",
+    fromBlock: DEPLOYED_ON_BLOCK,
     watch: true,
   });
 
@@ -94,6 +113,57 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
     if (!usdcBalance || !amountPerSwap || amountPerSwap === 0n) return 0n;
     return usdcBalance / amountPerSwap;
   }, [usdcBalance, amountPerSwap]);
+
+  // total USDC swapped for THIS position (from DCAExecuted history) — used to
+  // derive a progress bar against total committed funds (balance + spent).
+  const totalUsdcSpent = useMemo(() => {
+    if (!executedEvents) return 0n;
+    let sum = 0n;
+    for (const ev of executedEvents) {
+      const args = (ev as any).args as { positionId?: bigint; usdcSpent?: bigint } | undefined;
+      if (!args) continue;
+      if (args.positionId !== positionId) continue;
+      if (typeof args.usdcSpent === "bigint") sum += args.usdcSpent;
+    }
+    return sum;
+  }, [executedEvents, positionId]);
+
+  // For UX clarity: also surface executions completed so far.
+  const executionsCompleted = useMemo(() => {
+    if (!amountPerSwap || amountPerSwap === 0n) return 0n;
+    return totalUsdcSpent / amountPerSwap;
+  }, [totalUsdcSpent, amountPerSwap]);
+
+  const totalCommitted = useMemo(() => {
+    if (!usdcBalance) return totalUsdcSpent;
+    return (usdcBalance as bigint) + totalUsdcSpent;
+  }, [usdcBalance, totalUsdcSpent]);
+
+  // 0..100 — clamp to safe range; if nothing committed yet, show 0.
+  const progressPct = useMemo(() => {
+    if (totalCommitted === 0n) return 0;
+    // bigint-safe percent: (spent * 10000 / committed) gives basis points; / 100 → percent.
+    const bp = (totalUsdcSpent * 10000n) / totalCommitted;
+    const pct = Number(bp) / 100;
+    if (Number.isNaN(pct)) return 0;
+    return Math.min(100, Math.max(0, pct));
+  }, [totalUsdcSpent, totalCommitted]);
+
+  // Visible only as supplementary info — silences unused-warning for toppedUpEvents
+  // while remaining available for future enhancements (e.g. distinguishing original
+  // deposit from later top-ups). Not used in the progress numerator.
+  const totalToppedUp = useMemo(() => {
+    if (!toppedUpEvents) return 0n;
+    let sum = 0n;
+    for (const ev of toppedUpEvents) {
+      const args = (ev as any).args as { positionId?: bigint; amount?: bigint } | undefined;
+      if (!args) continue;
+      if (args.positionId !== positionId) continue;
+      if (typeof args.amount === "bigint") sum += args.amount;
+    }
+    return sum;
+  }, [toppedUpEvents, positionId]);
+  void totalToppedUp;
 
   const nextExecutionDate = useMemo(() => {
     if (!currentEpoch || lastExecutedEpoch === undefined || intervalInEpochs === undefined) return null;
@@ -282,18 +352,41 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
           </div>
         </div>
 
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between text-xs opacity-70">
+            <span>
+              Progress: {executionsCompleted.toString()} swap{executionsCompleted === 1n ? "" : "s"} done
+              {executionsRemaining > 0n ? `, ${executionsRemaining.toString()} to go` : ""}
+            </span>
+            <span>{progressPct.toFixed(1)}%</span>
+          </div>
+          <progress className="progress progress-primary w-full" value={progressPct} max={100} />
+        </div>
+
         {isOwner && active && (
           <div className="flex flex-wrap gap-2 mt-2">
             {clawdAccrued !== undefined && clawdAccrued > 0n && (
-              <button className="btn btn-sm btn-primary" disabled={withdrawBusy} onClick={handleWithdraw}>
+              <button
+                className="btn btn-sm btn-primary"
+                disabled={withdrawBusy || wrongNetwork}
+                onClick={handleWithdraw}
+              >
                 {withdrawBusy ? <span className="loading loading-spinner loading-xs" /> : null}
                 Withdraw CLAWD
               </button>
             )}
-            <button className="btn btn-sm" disabled={topUpBusy} onClick={() => setTopUpOpen(prev => !prev)}>
+            <button
+              className="btn btn-sm"
+              disabled={topUpBusy || wrongNetwork}
+              onClick={() => setTopUpOpen(prev => !prev)}
+            >
               Top Up USDC
             </button>
-            <button className="btn btn-sm btn-error btn-outline" disabled={closeBusy} onClick={handleClose}>
+            <button
+              className="btn btn-sm btn-error btn-outline"
+              disabled={closeBusy || wrongNetwork}
+              onClick={handleClose}
+            >
               {closeBusy ? <span className="loading loading-spinner loading-xs" /> : null}
               Close Position
             </button>
@@ -314,7 +407,7 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
                 className="input input-bordered input-sm w-full"
               />
             </div>
-            <button className="btn btn-sm btn-primary" disabled={topUpBusy} onClick={handleTopUp}>
+            <button className="btn btn-sm btn-primary" disabled={topUpBusy || wrongNetwork} onClick={handleTopUp}>
               {topUpBusy ? <span className="loading loading-spinner loading-xs" /> : null}
               Top Up
             </button>
@@ -343,7 +436,7 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
                 className="input input-bordered input-sm w-full"
               />
             </div>
-            <button className="btn btn-sm" disabled={slippageBusy} onClick={handleSlippage}>
+            <button className="btn btn-sm" disabled={slippageBusy || wrongNetwork} onClick={handleSlippage}>
               {slippageBusy ? <span className="loading loading-spinner loading-xs" /> : null}
               Save Slippage
             </button>

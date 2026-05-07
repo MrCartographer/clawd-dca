@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { NextPage } from "next";
 import { decodeEventLog, parseUnits } from "viem";
@@ -170,6 +170,13 @@ const CreatePage: NextPage = () => {
     hash: approveTxHash,
   });
 
+  // Cooldown / waiting flags — keep the Approve button disabled from click → confirm
+  // → cooldown → cached allowance reflects the new approval. Without these the
+  // button is briefly clickable in the window between the receipt landing and
+  // wagmi's cached allowance value updating, which permits a duplicate approve tx.
+  const [approveCooldown, setApproveCooldown] = useState(false);
+  const [waitingForAllowance, setWaitingForAllowance] = useState(false);
+
   const handleApprove = async () => {
     try {
       await writeAndOpen(() =>
@@ -187,11 +194,40 @@ const CreatePage: NextPage = () => {
     }
   };
 
-  // Re-read allowance once approve confirms.
-  if (approveConfirmed && approveTxHash) {
-    refetchAllowance();
-    resetApprove();
-  }
+  // Once the approve tx confirms, poll the allowance until the cached value
+  // catches up (or we hit a max-attempts ceiling), THEN drop the cooldown flags
+  // and reset the write hook. This must live in useEffect — calling
+  // refetchAllowance / setState during render is a React anti-pattern (it can
+  // trigger "Cannot update a component while rendering a different component"
+  // warnings and tight re-render loops).
+  useEffect(() => {
+    if (!approveConfirmed || !approveTxHash) return;
+    setApproveCooldown(true);
+    setWaitingForAllowance(true);
+    let attempts = 0;
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      if (cancelled) return;
+      attempts++;
+      const result = await refetchAllowance();
+      const fresh = (result?.data as bigint | undefined) ?? (usdcAllowance as bigint | undefined) ?? 0n;
+      if (fresh >= totalUsdcRaw || attempts > 20) {
+        clearInterval(interval);
+        if (!cancelled) {
+          setWaitingForAllowance(false);
+          setApproveCooldown(false);
+          resetApprove();
+        }
+      }
+    }, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+    // We intentionally depend only on the confirmation signal — re-running this
+    // effect on every allowance/totalUsdcRaw change would restart the interval.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approveConfirmed, approveTxHash]);
 
   // ---------------- create position ----------------
   const { writeContractAsync: writeDca, isPending: isCreating } = useScaffoldWriteContract({
@@ -402,11 +438,19 @@ const CreatePage: NextPage = () => {
                 <button
                   className="btn btn-secondary"
                   disabled={
-                    !needsApproval || insufficientBalance || isApproving || approveConfirming || totalUsdcRaw === 0n
+                    !needsApproval ||
+                    insufficientBalance ||
+                    isApproving ||
+                    approveConfirming ||
+                    approveCooldown ||
+                    waitingForAllowance ||
+                    totalUsdcRaw === 0n
                   }
                   onClick={handleApprove}
                 >
-                  {(isApproving || approveConfirming) && <span className="loading loading-spinner loading-xs" />}
+                  {(isApproving || approveConfirming || approveCooldown || waitingForAllowance) && (
+                    <span className="loading loading-spinner loading-xs" />
+                  )}
                   {needsApproval ? "1. Approve USDC" : "1. USDC Approved ✓"}
                 </button>
                 <button

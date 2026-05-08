@@ -47,8 +47,8 @@ export const WalletStrip = () => {
 
   if (!isConnected) {
     return (
-      <div className="card bg-base-100 shadow-sm border border-base-300">
-        <div className="card-body py-3 px-4 text-sm">
+      <div className="card">
+        <div className="card-body py-3 px-5 text-sm opacity-80">
           Connect your wallet to view balances and manage DCA positions.
         </div>
       </div>
@@ -56,19 +56,19 @@ export const WalletStrip = () => {
   }
 
   return (
-    <div className="card bg-base-100 shadow-sm border border-base-300">
-      <div className="card-body py-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+    <div className="card">
+      <div className="card-body py-3 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
         <div className="flex items-center gap-2">
-          <span className="opacity-70">Connected:</span>
+          <span className="opacity-60 text-xs uppercase tracking-wide">Connected</span>
           <AddressComp address={address} format="short" size="xs" chain={base} />
         </div>
-        <div className="flex items-center gap-4">
-          <div>
-            <span className="opacity-70 mr-1">USDC:</span>
+        <div className="flex items-center gap-5 tabular">
+          <div className="flex items-baseline gap-1.5">
+            <span className="opacity-60 text-xs">USDC</span>
             <span className="font-semibold">${formatUsdc(usdcBalance as bigint | undefined)}</span>
           </div>
-          <div>
-            <span className="opacity-70 mr-1">CLAWD:</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="opacity-60 text-xs">CLAWD</span>
             <span className="font-semibold">{formatClawd(clawdBalance as bigint | undefined)}</span>
           </div>
           {wrongNetwork && (

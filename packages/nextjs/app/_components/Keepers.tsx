@@ -190,20 +190,22 @@ const KeepersPage: NextPage = () => {
   };
 
   return (
-    <div className="max-w-5xl w-full mx-auto px-4 py-8 flex flex-col gap-6">
-      <header className="flex flex-col gap-1 text-center">
-        <h1 className="text-3xl font-bold my-0">Keeper Network</h1>
-        <p className="opacity-80 my-0">
+    <div className="max-w-5xl w-full mx-auto px-4 py-10 sm:py-14 flex flex-col gap-6">
+      <header className="flex flex-col gap-1.5 text-center">
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight my-0">Keeper Network</h1>
+        <p className="opacity-70 my-0 text-base max-w-2xl mx-auto">
           Permissionless keepers earn 0.39% USDC per swap. Anyone can run executions — including you.
         </p>
       </header>
 
       <WalletStrip />
 
-      <div className="card bg-base-100 shadow-sm border border-base-300">
-        <div className="card-body gap-3">
+      <div className="card">
+        <div className="card-body gap-3 p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-xl font-bold my-0">Ripe Positions ({ripePositions.length})</h2>
+            <h2 className="text-xl sm:text-2xl font-bold my-0 tracking-tight">
+              Ripe Positions <span className="opacity-50 font-medium">({ripePositions.length})</span>
+            </h2>
             {isConnected && wrongNetwork ? (
               <button
                 className="btn btn-warning btn-sm"

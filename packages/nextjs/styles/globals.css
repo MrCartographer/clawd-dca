@@ -2,11 +2,13 @@
 
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
-
 @theme {
   --shadow-center: 0 0 12px -2px rgb(0 0 0 / 0.05);
   --animate-pulse-fast: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  --font-sans:
+    "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
 }
 
 @plugin "daisyui" {
@@ -15,66 +17,110 @@
     dark --prefersdark;
 }
 
+/* ----------------------------------------------------------------------------
+ * Light theme — Carta "Ink" palette (light-first), Uniswap-style component feel.
+ * Brand accent uses the Ink Blue 70 (#285DA3) per the Carta style guide,
+ * with a dash of Highlight Orange (#FF7D55) reserved for the CLAWD lobster.
+ * ------------------------------------------------------------------------- */
 @plugin "daisyui/theme" {
   name: "light";
 
-  --color-primary: #93bbfb;
-  --color-primary-content: #212638;
-  --color-secondary: #dae8ff;
-  --color-secondary-content: #212638;
-  --color-accent: #93bbfb;
-  --color-accent-content: #212638;
-  --color-neutral: #212638;
-  --color-neutral-content: #ffffff;
-  --color-base-100: #ffffff;
-  --color-base-200: #f4f8ff;
-  --color-base-300: #dae8ff;
-  --color-base-content: #212638;
-  --color-info: #93bbfb;
-  --color-success: #34eeb6;
-  --color-warning: #ffcf72;
-  --color-error: #ff8863;
+  /* Primary = Ink Blue 70 (the activator) */
+  --color-primary: #285da3;
+  --color-primary-content: #ffffff;
 
-  --radius-field: 0.5rem;
-  --radius-box: 1rem;
+  /* Secondary = Surface Blue Default (subtle blue-tinted surface) */
+  --color-secondary: #eaf0f8;
+  --color-secondary-content: #122948;
+
+  /* Accent = orange highlight, used sparingly for CLAWD branding moments */
+  --color-accent: #ff7d55;
+  --color-accent-content: #1a1a1a;
+
+  --color-neutral: #1a1a1a;
+  --color-neutral-content: #ffffff;
+
+  /* Backgrounds: white primary, warm brown-10 underlay, subtle gray surfaces */
+  --color-base-100: #ffffff;
+  --color-base-200: #fbfaf9; /* Brown 10 — warm surface */
+  --color-base-300: #f1f1f1; /* Gray 10 — underlay */
+  --color-base-content: #1a1a1a;
+
+  --color-info: #285da3;
+  --color-success: #2d9e90;
+  --color-warning: #f8d648;
+  --color-error: #e52431;
+
+  --radius-field: 0.75rem; /* 12px — Uniswap-ish rounded inputs */
+  --radius-box: 1.25rem; /* 20px — soft rounded cards */
   --tt-tailw: 6px;
 }
 
+/* ----------------------------------------------------------------------------
+ * Dark theme — kept for parity, but tuned to Ink dark-surface tokens
+ * ------------------------------------------------------------------------- */
 @plugin "daisyui/theme" {
   name: "dark";
 
-  --color-primary: #212638;
-  --color-primary-content: #f9fbff;
-  --color-secondary: #323f61;
-  --color-secondary-content: #f9fbff;
-  --color-accent: #4969a6;
-  --color-accent-content: #f9fbff;
-  --color-neutral: #f9fbff;
-  --color-neutral-content: #385183;
-  --color-base-100: #385183;
-  --color-base-200: #2a3655;
-  --color-base-300: #212638;
-  --color-base-content: #f9fbff;
-  --color-info: #385183;
-  --color-success: #34eeb6;
-  --color-warning: #ffcf72;
+  --color-primary: #4176bc;
+  --color-primary-content: #ffffff;
+
+  --color-secondary: #1a3e6d;
+  --color-secondary-content: #eaf0f8;
+
+  --color-accent: #ff7d55;
+  --color-accent-content: #1a1a1a;
+
+  --color-neutral: #f1f1f1;
+  --color-neutral-content: #1a1a1a;
+
+  --color-base-100: #2c3030; /* Gray 100 — darkest surface */
+  --color-base-200: #394040; /* Gray 90 */
+  --color-base-300: #1a1a1a; /* Black */
+  --color-base-content: #f1f1f1;
+
+  --color-info: #4176bc;
+  --color-success: #2d9e90;
+  --color-warning: #f8d648;
   --color-error: #ff8863;
 
-  --radius-field: 0.5rem;
-  --radius-box: 1rem;
-
+  --radius-field: 0.75rem;
+  --radius-box: 1.25rem;
   --tt-tailw: 6px;
   --tt-bg: var(--color-primary);
 }
 
-/*
-  The default border color has changed to `currentColor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
+/* ----------------------------------------------------------------------------
+ * Carta Ink design tokens — usable directly via var() in component styles
+ * ------------------------------------------------------------------------- */
+:root,
+[data-theme] {
+  --ink-white: #ffffff;
+  --ink-black: #1a1a1a;
+  --ink-gray-10: #f1f1f1;
+  --ink-gray-40: #dedfdf;
+  --ink-gray-60: #a7aaaa;
+  --ink-gray-80: #656b6b;
+  --ink-gray-100: #2c3030;
+  --ink-brown-10: #fbfaf9;
 
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
-*/
+  --ink-blue-10: #eaf0f8;
+  --ink-blue-30: #c0d1e9;
+  --ink-blue-70: #285da3;
+  --ink-blue-90: #1a3e6d;
+  --ink-blue-100: #122948;
+
+  --ink-orange-60: #ff7d55;
+  --ink-orange-10: #fff7f5;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1);
+
+  background: var(--color-base-200);
+}
+
+/* Tailwind v4 default border-color compat */
 @layer base {
   *,
   ::after,
@@ -84,12 +130,19 @@
     border-color: var(--color-gray-200, currentColor);
   }
 
-  p {
-    margin: 1rem 0;
+  html {
+    font-family:
+      "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 
   body {
     min-height: 100vh;
+    letter-spacing: -0.005em;
+  }
+
+  p {
+    margin: 1rem 0;
   }
 
   h1,
@@ -97,28 +150,288 @@
   h3,
   h4 {
     margin-bottom: 0.5rem;
-    line-height: 1;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+  }
+
+  h1 {
+    letter-spacing: -0.02em;
+    font-weight: 700;
   }
 }
 
-:root,
-[data-theme] {
-  background: var(--color-base-200);
+/* ----------------------------------------------------------------------------
+ * Buttons — pill-shaped (Uniswap-ish) with Carta color tokens
+ * ------------------------------------------------------------------------- */
+.btn {
+  border-radius: 9999rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+  box-shadow: var(--shadow-sm);
 }
 
-.btn {
-  @apply shadow-md;
-  border-radius: 9999rem;
+.btn:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .btn.btn-ghost {
-  @apply shadow-none;
+  box-shadow: none;
+}
+
+.btn.btn-ghost:hover {
+  box-shadow: none;
+  background-color: var(--ink-blue-10);
+}
+
+.btn-primary {
+  background-color: var(--ink-blue-70);
+  border-color: var(--ink-blue-70);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: var(--ink-blue-90);
+  border-color: var(--ink-blue-90);
 }
 
 .link {
+  color: var(--ink-blue-70);
   text-underline-offset: 2px;
 }
 
 .link:hover {
-  opacity: 80%;
+  color: var(--ink-blue-90);
+  opacity: 1;
+}
+
+/* ----------------------------------------------------------------------------
+ * Form inputs — soft halo focus per Carta Ink, Uniswap-rounded
+ * ------------------------------------------------------------------------- */
+.input,
+.select,
+.textarea {
+  border-radius: 0.875rem; /* 14px */
+  border-color: var(--ink-gray-40);
+  background-color: var(--ink-white);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.input:focus,
+.input:focus-within,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--ink-blue-70);
+  box-shadow: 0 0 0 3px var(--ink-blue-30);
+}
+
+[data-theme="dark"] .input,
+[data-theme="dark"] .select,
+[data-theme="dark"] .textarea {
+  background-color: var(--ink-gray-100);
+  border-color: var(--ink-gray-80);
+}
+
+/* ----------------------------------------------------------------------------
+ * Cards — soft rounded surfaces with subtle border + elevation
+ * ------------------------------------------------------------------------- */
+.card {
+  border: 1px solid var(--ink-gray-40);
+  box-shadow: var(--shadow-sm);
+  background-color: var(--ink-white);
+  border-radius: var(--radius-box);
+  transition: box-shadow 200ms ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] .card {
+  background-color: var(--ink-gray-100);
+  border-color: var(--ink-gray-80);
+}
+
+/* ----------------------------------------------------------------------------
+ * Uniswap-style "swap card" — the prominent, centered, shadowed surface
+ * used for the create-position flow and dashboard hero.
+ * ------------------------------------------------------------------------- */
+.swap-card {
+  background: var(--ink-white);
+  border: 1px solid var(--ink-gray-40);
+  border-radius: 24px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    0 2px 8px rgba(0, 0, 0, 0.04);
+  padding: 1.25rem;
+}
+
+[data-theme="dark"] .swap-card {
+  background: var(--ink-gray-100);
+  border-color: var(--ink-gray-80);
+}
+
+/* "Token panel" — the inset, subtly tinted block inside the swap card,
+ * Uniswap's signature input-with-token-selector look. */
+.token-panel {
+  background: var(--ink-brown-10);
+  border: 1px solid var(--ink-gray-40);
+  border-radius: 18px;
+  padding: 1rem 1.125rem;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.token-panel:hover {
+  border-color: var(--ink-gray-60);
+}
+
+.token-panel:focus-within {
+  border-color: var(--ink-blue-70);
+  box-shadow: 0 0 0 3px var(--ink-blue-30);
+}
+
+[data-theme="dark"] .token-panel {
+  background: var(--ink-black);
+  border-color: var(--ink-gray-80);
+}
+
+.token-panel input {
+  background: transparent;
+  border: none;
+  outline: none;
+  width: 100%;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink-black);
+  padding: 0;
+}
+
+[data-theme="dark"] .token-panel input {
+  color: var(--ink-white);
+}
+
+.token-panel input:focus {
+  box-shadow: none;
+}
+
+/* "Token chip" — pill-shaped token selector inside the token panel */
+.token-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--ink-white);
+  border: 1px solid var(--ink-gray-40);
+  border-radius: 9999rem;
+  padding: 0.375rem 0.75rem 0.375rem 0.5rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .token-chip {
+  background: var(--ink-gray-100);
+  border-color: var(--ink-gray-80);
+  color: var(--ink-white);
+}
+
+/* ----------------------------------------------------------------------------
+ * Pill nav (Uniswap header style) — used in <Header />
+ * ------------------------------------------------------------------------- */
+.pill-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--ink-brown-10);
+  border: 1px solid var(--ink-gray-40);
+  border-radius: 9999rem;
+  padding: 0.25rem;
+}
+
+[data-theme="dark"] .pill-nav {
+  background: var(--ink-gray-100);
+  border-color: var(--ink-gray-80);
+}
+
+.pill-nav a {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-radius: 9999rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink-gray-80);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.pill-nav a:hover {
+  color: var(--ink-black);
+  background: var(--ink-white);
+}
+
+[data-theme="dark"] .pill-nav a:hover {
+  color: var(--ink-white);
+  background: var(--ink-gray-80);
+}
+
+.pill-nav a.is-active {
+  color: var(--ink-black);
+  background: var(--ink-white);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .pill-nav a.is-active {
+  color: var(--ink-white);
+  background: var(--ink-gray-80);
+}
+
+/* ----------------------------------------------------------------------------
+ * Page background tint — subtle warm gradient gives a Uniswap-app feel
+ * without violating Carta's "no gradients on backgrounds" rule (this is a
+ * tint between two near-white surfaces, not a saturated brand gradient).
+ * ------------------------------------------------------------------------- */
+.app-bg {
+  background:
+    radial-gradient(circle at 20% -10%, var(--ink-blue-10) 0%, transparent 45%),
+    radial-gradient(circle at 100% 0%, var(--ink-orange-10) 0%, transparent 45%),
+    var(--ink-brown-10);
+  min-height: 100vh;
+}
+
+[data-theme="dark"] .app-bg {
+  background:
+    radial-gradient(circle at 20% -10%, rgba(40, 93, 163, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 100% 0%, rgba(255, 125, 85, 0.08) 0%, transparent 45%),
+    var(--ink-gray-100);
+}
+
+/* Tabular numerals make the dollar/CLAWD figures align cleanly */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Generic info / strategy chip — used by buttons that aren't toggle pills */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--ink-blue-10);
+  color: var(--ink-blue-70);
+  border: 1px solid var(--ink-blue-30);
 }

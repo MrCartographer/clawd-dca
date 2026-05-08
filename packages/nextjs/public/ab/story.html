@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>The Patient Crab — a CLAWD fable</title>
+<meta name="description" content="A short story about two buyers, one market, and the quiet power of showing up every day." />
+<link rel="icon" href="/clawd-logo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --paper: #f4ece1;
+    --paper-2: #ecdfc9;
+    --sea: #1e3a5f;
+    --sea-deep: #0d2238;
+    --coral: #e07856;
+    --sun: #f4b860;
+    --crab: #c1442e;
+    --gull: #cfd6dd;
+    --kelp: #2f6b4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  body { overflow-x: hidden; }
+
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 28px;
+    mix-blend-mode: difference; color: #fff;
+    pointer-events: none;
+  }
+  .nav .brand, .nav .skip { pointer-events: auto; }
+  .nav .brand { font-family: 'Fraunces', serif; font-weight: 800; letter-spacing: 0.02em; font-size: 18px; }
+  .nav .skip { font-size: 13px; opacity: 0.85; text-decoration: none; color: inherit; border-bottom: 1px solid currentColor; padding-bottom: 2px; }
+
+  /* Sections */
+  section {
+    min-height: 100vh; width: 100%;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+    padding: 80px 24px;
+  }
+  .panel {
+    max-width: 720px; width: 100%;
+    text-align: center;
+    transform: translateY(40px); opacity: 0;
+    transition: transform 1.1s cubic-bezier(.2,.7,.2,1), opacity 1.1s;
+  }
+  .panel.in { transform: none; opacity: 1; }
+  .panel .eyebrow {
+    font-size: 12px; letter-spacing: 0.32em; text-transform: uppercase;
+    margin-bottom: 22px; opacity: 0.55;
+  }
+  .panel h1, .panel h2 {
+    font-family: 'Fraunces', serif; font-weight: 800;
+    line-height: 1.05; letter-spacing: -0.02em;
+  }
+  .panel h1 { font-size: clamp(48px, 9vw, 120px); }
+  .panel h2 { font-size: clamp(32px, 5.5vw, 64px); margin-bottom: 24px; }
+  .panel p {
+    font-family: 'Fraunces', serif; font-weight: 400;
+    font-size: clamp(18px, 2.2vw, 24px); line-height: 1.5;
+    max-width: 560px; margin: 0 auto;
+  }
+  .panel p + p { margin-top: 18px; }
+  .panel em { font-style: italic; color: var(--coral); }
+
+  /* Scenes */
+  .s-cover { background: linear-gradient(180deg, var(--sun) 0%, var(--coral) 55%, var(--sea) 100%); color: var(--paper); }
+  .s-cover .panel p { color: rgba(244,236,225,0.9); }
+  .s-cover .horizon {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 35%;
+    background: linear-gradient(180deg, transparent, var(--sea-deep));
+  }
+  .s-once { background: var(--paper); }
+  .s-once .chart { width: 100%; max-width: 640px; margin: 36px auto 0; }
+  .s-gull { background: var(--sea); color: var(--paper); }
+  .s-crab { background: var(--paper-2); }
+  .s-years { background: var(--sea-deep); color: var(--paper); }
+  .s-moral { background: var(--paper); }
+  .s-cta { background: linear-gradient(180deg, var(--paper) 0%, var(--sun) 60%, var(--coral) 100%); }
+
+  /* Generic illustration container */
+  .scene {
+    width: min(560px, 88vw);
+    aspect-ratio: 4/3;
+    margin: 0 auto 36px;
+    position: relative;
+  }
+  .scene svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+  /* Floating clouds / parallax */
+  .float-slow { animation: float 9s ease-in-out infinite; }
+  .float-fast { animation: float 5s ease-in-out infinite; }
+  @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-14px) } }
+
+  .wave-bob { animation: bob 4s ease-in-out infinite; transform-origin: center; }
+  @keyframes bob { 0%,100% { transform: translateY(0) rotate(-1deg) } 50% { transform: translateY(-6px) rotate(1deg) } }
+
+  /* Comparison chart (years scene) */
+  .legend { display: flex; gap: 22px; justify-content: center; margin-top: 18px; font-size: 13px; opacity: 0.85; }
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; vertical-align: middle; }
+  .stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 16px; margin-top: 36px;
+    max-width: 640px; margin-left: auto; margin-right: auto;
+  }
+  .stat {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px; padding: 18px 14px; text-align: left;
+  }
+  .stat .k { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.6; }
+  .stat .v { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 700; margin-top: 6px; }
+  @media (max-width: 540px) { .stats { grid-template-columns: 1fr 1fr; } .stat:last-child { grid-column: span 2; } }
+
+  /* CTA */
+  .cta-card {
+    background: var(--ink); color: var(--paper);
+    border-radius: 24px; padding: 36px 32px;
+    max-width: 560px; margin: 36px auto 0; text-align: left;
+  }
+  .cta-card .meta { font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.6; }
+  .cta-card h3 { font-family: 'Fraunces', serif; font-size: 32px; line-height: 1.1; margin: 12px 0 18px; font-weight: 700; }
+  .cta-card .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .cta-card .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--coral); color: #fff; text-decoration: none;
+    padding: 14px 22px; border-radius: 999px; font-weight: 600; font-size: 15px;
+    transition: transform 0.15s, background 0.15s;
+  }
+  .cta-card .btn:hover { transform: translateY(-1px); background: #ed8a68; }
+  .cta-card .ghost {
+    color: var(--paper); text-decoration: none; font-size: 13px; opacity: 0.7;
+    border-bottom: 1px solid currentColor; padding-bottom: 2px;
+  }
+
+  .footer-note { font-size: 12px; color: var(--ink); opacity: 0.5; text-align: center; padding: 28px 24px 36px; font-family: 'Inter'; }
+
+  /* Tiny pulses */
+  .tide-line {
+    position: absolute; inset: auto 0 0 0;
+    height: 4px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="brand">🦞 CLAWD</div>
+  <a class="skip" href="/create">Skip → Create position</a>
+</nav>
+
+<!-- 1. COVER -->
+<section class="s-cover">
+  <div class="panel" data-reveal>
+    <div class="eyebrow">A short fable for impatient buyers</div>
+    <h1>The Patient<br/>Crab.</h1>
+    <p style="margin-top:28px">There are two ways to walk into a market.<br/>This is the story of both.</p>
+  </div>
+  <div class="horizon"></div>
+</section>
+
+<!-- 2. ONCE UPON A MARKET -->
+<section class="s-once">
+  <div class="panel" data-reveal>
+    <div class="eyebrow">Chapter one</div>
+    <h2>Once upon a market…</h2>
+    <p>Prices rose and fell with the tides. <em>Up. Down. Up again.</em> Nobody could say which way the next wave would crash.</p>
+    <svg class="chart" viewBox="0 0 600 220" aria-hidden="true">
+      <defs>
+        <linearGradient id="ocean" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stop-color="#1e3a5f" stop-opacity="0.15"/>
+          <stop offset="1" stop-color="#1e3a5f" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,140 C50,80 90,180 140,120 C190,60 230,160 280,110 C330,60 380,170 430,90 C480,30 530,140 600,80 L600,220 L0,220 Z" fill="url(#ocean)"/>
+      <path d="M0,140 C50,80 90,180 140,120 C190,60 230,160 280,110 C330,60 380,170 430,90 C480,30 530,140 600,80" fill="none" stroke="#1e3a5f" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+  </div>
+</section>
+
+<!-- 3. THE GULL -->
+<section class="s-gull">
+  <div class="panel" data-reveal>
+    <div class="eyebrow">Chapter two — the gull</div>
+    <div class="scene">
+      <svg viewBox="0 0 400 300" aria-hidden="true">
+        <!-- sun -->
+        <circle cx="320" cy="70" r="36" fill="#f4b860" opacity="0.4"/>
+        <!-- gull -->
+        <g class="float-fast" transform="translate(120,90)">
+          <path d="M0,30 Q40,-10 80,30 Q120,-10 160,30" stroke="#cfd6dd" stroke-width="6" fill="none" stroke-linecap="round"/>
+        </g>
+        <!-- crash -->
+        <g transform="translate(0,180)">
+          <path d="M0,40 Q60,10 120,40 Q180,70 240,30 Q300,0 400,40 L400,120 L0,120 Z" fill="#0d2238"/>
+          <path d="M0,40 Q60,10 120,40 Q180,70 240,30 Q300,0 400,40" stroke="#e07856" stroke-width="2" fill="none" opacity="0.5"/>
+        </g>
+      </svg>
+    </div>
+    <h2>The Gull bought it all in one beak-full.</h2>
+    <p>She saw the price on a Tuesday and bought everything she had. By Friday she was watching it sink. <em>Timing the market is a bird's game,</em> the old crabs warned. She did not listen.</p>
+  </div>
+</section>
+
+<!-- 4. THE CRAB -->
+<section class="s-crab">
+  <div class="panel" data-reveal>
+    <div class="eyebrow">Chapter three — the crab</div>
+    <div class="scene">
+      <svg viewBox="0 0 400 300" aria-hidden="true">
+        <!-- pool -->
+        <ellipse cx="200" cy="240" rx="180" ry="30" fill="#1e3a5f" opacity="0.12"/>
+        <!-- ticks (one per tide) -->
+        <g fill="#c1442e" opacity="0.85">
+          <circle cx="60" cy="240" r="6"/>
+          <circle cx="100" cy="240" r="6"/>
+          <circle cx="140" cy="240" r="6"/>
+          <circle cx="180" cy="240" r="6"/>
+          <circle cx="220" cy="240" r="6"/>
+          <circle cx="260" cy="240" r="6"/>
+          <circle cx="300" cy="240" r="6"/>
+          <circle cx="340" cy="240" r="6"/>
+        </g>
+        <!-- crab -->
+        <g class="wave-bob" transform="translate(170,170)">
+          <ellipse cx="30" cy="30" rx="36" ry="22" fill="#c1442e"/>
+          <path d="M-8,30 Q-22,18 -10,8" stroke="#c1442e" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <path d="M68,30 Q82,18 70,8" stroke="#c1442e" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <circle cx="22" cy="24" r="3" fill="#1a1a1a"/>
+          <circle cx="38" cy="24" r="3" fill="#1a1a1a"/>
+          <path d="M-14,4 L-6,14 M74,4 L66,14" stroke="#c1442e" stroke-width="2"/>
+          <ellipse cx="-10" cy="2" rx="3" ry="3" fill="#c1442e"/>
+          <ellipse cx="70" cy="2" rx="3" ry="3" fill="#c1442e"/>
+        </g>
+      </svg>
+    </div>
+    <h2>The Crab bought a little, with every tide.</h2>
+    <p>Three hours, a day, a week — it didn't matter which rhythm she chose. She just <em>showed up</em>. Sometimes the price was high. Sometimes low. The crab kept walking sideways into the market.</p>
+  </div>
+</section>
+
+<!-- 5. YEARS PASS -->
+<section class="s-years">
+  <div class="panel" data-reveal>
+    <div class="eyebrow">Chapter four — years pass</div>
+    <h2>And then the seasons turned.</h2>
+    <p>The Gull, exhausted from watching prices, had stopped looking. The Crab, who never watched, opened her shell to count what the tides had brought.</p>
+
+    <div class="stats">
+      <div class="stat"><div class="k">Gull's stack</div><div class="v">−38%</div></div>
+      <div class="stat"><div class="k">Crab's stack</div><div class="v">+71%</div></div>
+      <div class="stat"><div class="k">Hours watching charts</div><div class="v">0</div></div>
+    </div>
+    <p style="margin-top:28px; font-size: 16px; opacity: 0.7;">Illustrative. Markets don't promise either outcome — but they do reward consistency over cleverness.</p>
+  </div>
+</section>
+
+<!-- 6. MORAL -->
+<section class="s-moral">
+  <div class="panel" data-reveal>
+    <div class="eyebrow">Moral</div>
+    <h2>You don't beat the tide.<br/>You <em>schedule</em> it.</h2>
+    <p>CLAWD DCA lets you deposit USDC once and pick a cadence. Permissionless keepers run your swaps on Uniswap V3. You go for a walk.</p>
+  </div>
+</section>
+
+<!-- 7. CTA -->
+<section class="s-cta">
+  <div class="panel" data-reveal>
+    <div class="eyebrow">Become the crab</div>
+    <h2>Walk sideways into the market.</h2>
+
+    <div class="cta-card">
+      <div class="meta">CLAWD DCA · Base · Uniswap V3</div>
+      <h3>Set it once.<br/>The tide does the rest.</h3>
+      <div class="row">
+        <a class="btn" href="/create">
+          Create a position
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="ghost" href="/">See the dashboard</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="footer-note">A fable, not financial advice. Verify the contract on Basescan before you trust it.</div>
+
+<script>
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    }
+  }, { threshold: 0.2 });
+  document.querySelectorAll('[data-reveal]').forEach(el => io.observe(el));
+</script>
+</body>
+</html>

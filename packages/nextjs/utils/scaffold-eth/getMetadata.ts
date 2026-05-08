@@ -56,13 +56,5 @@ export const getMetadata = ({
       description: description,
       images: [imageUrl],
     },
-    icons: {
-      icon: [
-        {
-          url: "/icon.svg",
-          type: "image/svg+xml",
-        },
-      ],
-    },
   };
 };

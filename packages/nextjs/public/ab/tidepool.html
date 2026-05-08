@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>The Tide Pool — your CLAWD position, alive</title>
+<meta name="description" content="An ambient living dashboard. Each tide is a swap; each wave brings a little more CLAWD home." />
+<link rel="icon" href="/clawd-logo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;500;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --night: #08111e;
+    --dusk: #2b3a5a;
+    --dawn: #d18a6a;
+    --day: #6fb1d1;
+    --foam: #eef4f6;
+    --shell: #f3ead6;
+    --ink: #0d1620;
+    --kelp: #2c5e4f;
+    --pearl: #ffe9b6;
+    --coral: #d05a3c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; min-height: 100vh; overflow-x: hidden;
+    color: var(--foam);
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--night);
+    transition: background 6s ease;
+  }
+
+  /* Sky / scene container */
+  .stage {
+    position: relative;
+    width: 100%; height: 100vh; min-height: 640px;
+    overflow: hidden;
+  }
+  .sky {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, var(--sky-top, #08111e) 0%, var(--sky-mid, #2b3a5a) 60%, var(--sky-bot, #4f6a90) 100%);
+    transition: background 6s ease;
+  }
+  .stars {
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 12% 18%, #fff 1px, transparent 1.5px),
+      radial-gradient(1px 1px at 28% 42%, #fff 1px, transparent 1.5px),
+      radial-gradient(1px 1px at 47% 12%, #fff 1px, transparent 1.5px),
+      radial-gradient(1px 1px at 63% 28%, #fff 1px, transparent 1.5px),
+      radial-gradient(1px 1px at 80% 8%, #fff 1px, transparent 1.5px),
+      radial-gradient(1px 1px at 91% 36%, #fff 1px, transparent 1.5px),
+      radial-gradient(1.4px 1.4px at 22% 8%, #fff 1px, transparent 1.5px),
+      radial-gradient(1.4px 1.4px at 56% 5%, #fff 1px, transparent 1.5px);
+    opacity: var(--stars-op, 1);
+    transition: opacity 4s ease;
+  }
+  .celestial {
+    position: absolute;
+    width: 64px; height: 64px;
+    left: var(--celest-x, 12%);
+    top: var(--celest-y, 18%);
+    transition: left 6s ease, top 6s ease, background 4s ease, box-shadow 4s ease;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--celest-c, #f6efe1), var(--celest-c2, #c9c2a8));
+    box-shadow: 0 0 40px var(--celest-glow, rgba(246,239,225,0.45));
+  }
+  .horizon {
+    position: absolute; left: 0; right: 0; bottom: 30%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    opacity: 0.6;
+  }
+  .sea {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 30%;
+    background: linear-gradient(180deg, var(--sea-top, #1d3050) 0%, var(--sea-bot, #07121f) 100%);
+    transition: background 6s ease;
+  }
+  /* Wave layers */
+  .wave {
+    position: absolute; left: -10%; right: -10%;
+    height: 80px;
+    background-repeat: repeat-x;
+    background-size: 240px 80px;
+    opacity: 0.85;
+    will-change: transform;
+  }
+  .wave.w1 { bottom: 24%; height: 60px; opacity: 0.4; animation: drift 22s linear infinite; }
+  .wave.w2 { bottom: 18%; height: 70px; opacity: 0.55; animation: drift 16s linear infinite reverse; }
+  .wave.w3 { bottom: 8%; height: 100px; opacity: 0.85; animation: drift 12s linear infinite; }
+  @keyframes drift { from { background-position-x: 0; } to { background-position-x: 240px; } }
+
+  /* Tide pool foreground */
+  .pool {
+    position: absolute; left: 50%; bottom: 6%;
+    width: min(640px, 88vw); height: 200px;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .pool .water {
+    position: absolute; inset: 30px 0 0 0;
+    background: radial-gradient(ellipse at 50% 30%, rgba(110,180,210,0.55), rgba(20,40,70,0.85));
+    border-radius: 50%;
+    box-shadow: inset 0 -10px 30px rgba(0,0,0,0.5), 0 0 50px rgba(110,180,210,0.2);
+  }
+  .pool .ripple {
+    position: absolute; left: 50%; top: 50%;
+    width: 20px; height: 6px;
+    border: 1.5px solid rgba(255,255,255,0.7);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+  }
+  .ripple.go { animation: ripple 1.6s ease-out forwards; }
+  @keyframes ripple {
+    0% { width: 20px; height: 6px; opacity: 0.85; }
+    100% { width: 380px; height: 90px; opacity: 0; border-color: rgba(255,255,255,0.05); }
+  }
+
+  /* The lobster — your position */
+  .lobster {
+    position: absolute; left: 50%; top: 70px;
+    transform: translateX(-50%);
+    font-size: clamp(64px, 11vw, 110px);
+    filter: drop-shadow(0 6px 12px rgba(0,0,0,0.5));
+    animation: bob 5s ease-in-out infinite;
+    user-select: none;
+  }
+  @keyframes bob { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-6px); } }
+
+  /* Pearl rises (each tide) */
+  .pearl {
+    position: absolute;
+    width: 12px; height: 12px;
+    left: var(--px, 50%); top: 100%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--pearl), #c8a04a);
+    box-shadow: 0 0 12px rgba(255,233,182,0.8);
+    animation: rise 3.5s ease-out forwards;
+  }
+  @keyframes rise {
+    0% { transform: translateY(0); opacity: 0; }
+    20% { opacity: 1; }
+    100% { transform: translateY(-160px); opacity: 0; }
+  }
+
+  /* Bubbles */
+  .bubbles { position: absolute; inset: 0; pointer-events: none; }
+  .bubble {
+    position: absolute;
+    bottom: -20px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    border: 1px solid rgba(255,255,255,0.4);
+    animation: float-up var(--dur, 8s) linear infinite;
+    opacity: 0;
+  }
+  @keyframes float-up {
+    0% { transform: translateY(0); opacity: 0; }
+    10% { opacity: 1; }
+    100% { transform: translateY(-100vh); opacity: 0; }
+  }
+
+  /* Top nav */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 22px 28px;
+    color: var(--foam);
+  }
+  .brand {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 500; letter-spacing: 0.18em;
+    font-size: 16px; text-transform: uppercase;
+  }
+  .brand span { font-style: italic; opacity: 0.7; font-weight: 300; }
+  .skip {
+    color: var(--foam); text-decoration: none;
+    font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase;
+    opacity: 0.7;
+    border-bottom: 1px solid currentColor; padding-bottom: 2px;
+  }
+
+  /* Headline overlay */
+  .headline {
+    position: absolute; top: 22%; left: 50%; transform: translateX(-50%);
+    text-align: center;
+    width: min(820px, 90vw);
+    z-index: 4;
+  }
+  .eyebrow {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px; letter-spacing: 0.42em; text-transform: uppercase;
+    opacity: 0.65;
+    margin-bottom: 24px;
+  }
+  .title {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: clamp(42px, 7vw, 92px);
+    line-height: 1.05; letter-spacing: -0.01em;
+  }
+  .title em {
+    font-style: italic;
+    color: var(--pearl);
+    text-shadow: 0 0 24px rgba(255,233,182,0.4);
+  }
+  .subtitle {
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(15px, 1.6vw, 18px);
+    font-weight: 300; opacity: 0.78;
+    margin-top: 24px; line-height: 1.6;
+    max-width: 520px; margin-left: auto; margin-right: auto;
+  }
+
+  /* Dashboard panel — minimal glass */
+  .panel {
+    position: absolute; left: 50%; bottom: 36px;
+    transform: translateX(-50%);
+    width: min(720px, 92vw);
+    background: rgba(8,17,30,0.55);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 18px;
+    padding: 20px 22px;
+    z-index: 6;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr) auto;
+    gap: 18px;
+    align-items: center;
+  }
+  @media (max-width: 720px) {
+    .panel { grid-template-columns: 1fr 1fr; }
+    .panel .cta-cell { grid-column: span 2; }
+  }
+  .cell .k {
+    font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+    opacity: 0.55; margin-bottom: 6px;
+  }
+  .cell .v {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px; font-weight: 500;
+    color: var(--foam);
+  }
+  .cell .v.pearl { color: var(--pearl); }
+  .cell .sub { font-size: 11px; opacity: 0.55; margin-top: 2px; }
+
+  .cta-cell { text-align: right; }
+  .cta {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--foam); color: var(--ink);
+    text-decoration: none;
+    padding: 12px 20px;
+    border-radius: 999px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500; font-size: 13px;
+    letter-spacing: 0.04em;
+    transition: transform 0.15s, background 0.15s;
+  }
+  .cta:hover { transform: translateY(-1px); background: var(--pearl); }
+
+  /* Tide clock — tiny moon-cycle ring */
+  .clock-wrap {
+    position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
+    z-index: 4;
+    display: none;
+  }
+  .tide-meta {
+    position: absolute; bottom: 16%; left: 28px;
+    z-index: 5;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase;
+    opacity: 0.7;
+    line-height: 2;
+  }
+  .tide-meta strong { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 500; letter-spacing: 0; text-transform: none; opacity: 1; display: block; }
+
+  /* Cadence picker — bottom-left */
+  .cadence {
+    position: absolute; bottom: 16%; right: 28px;
+    z-index: 5;
+    display: flex; flex-direction: column; gap: 6px;
+    align-items: flex-end;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase;
+  }
+  .cadence .label { opacity: 0.7; margin-bottom: 4px; }
+  .cad-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--foam);
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    transition: all 0.2s;
+  }
+  .cad-btn:hover { background: rgba(255,255,255,0.12); }
+  .cad-btn.active { background: var(--foam); color: var(--ink); border-color: var(--foam); }
+
+  @media (max-width: 720px) {
+    .tide-meta, .cadence { position: static; padding: 0 24px; margin-top: 12px; align-items: flex-start; bottom: auto; left: auto; right: auto; }
+    .cadence { flex-direction: row; flex-wrap: wrap; }
+    .headline { top: 16%; }
+    .panel { position: static; transform: none; margin: 24px auto; width: 92%; }
+    .stage { height: auto; min-height: auto; padding-bottom: 24px; }
+  }
+
+  /* Section below the fold */
+  .below {
+    background: linear-gradient(180deg, #07121f 0%, #050b15 100%);
+    color: var(--foam);
+    padding: 96px 28px 120px;
+  }
+  .below .inner { max-width: 880px; margin: 0 auto; }
+  .below h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300; font-size: clamp(36px, 5vw, 56px);
+    letter-spacing: -0.01em; line-height: 1.1;
+    margin-bottom: 24px;
+  }
+  .below h2 em { font-style: italic; color: var(--pearl); }
+  .below p {
+    max-width: 580px;
+    font-size: 16px; line-height: 1.7;
+    opacity: 0.78;
+    margin-bottom: 40px;
+  }
+  .three {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+    margin-top: 36px;
+  }
+  @media (max-width: 720px) { .three { grid-template-columns: 1fr; } }
+  .feature {
+    border-top: 1px solid rgba(255,255,255,0.12);
+    padding-top: 18px;
+  }
+  .feature .num {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 28px; font-style: italic; color: var(--pearl);
+    margin-bottom: 6px;
+  }
+  .feature h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 500; font-size: 22px;
+    margin-bottom: 8px;
+  }
+  .feature p { font-size: 14px; line-height: 1.6; opacity: 0.75; margin-bottom: 0; }
+
+  .footer {
+    text-align: center;
+    font-size: 12px; opacity: 0.4;
+    padding: 36px 24px 24px;
+    background: #050b15;
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="brand">CLAWD <span>· tide pool</span></div>
+  <a class="skip" href="/create">Begin →</a>
+</nav>
+
+<div class="stage" id="stage">
+  <div class="sky"></div>
+  <div class="stars"></div>
+  <div class="celestial" id="celestial"></div>
+  <div class="horizon"></div>
+
+  <div class="bubbles" id="bubbles"></div>
+
+  <div class="sea">
+    <svg class="wave w1" preserveAspectRatio="none" viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0,40 Q60,10 120,40 T240,40 L240,80 L0,80 Z" fill="#3a5b85" opacity="0.55"/>
+    </svg>
+    <svg class="wave w2" preserveAspectRatio="none" viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0,40 Q60,15 120,40 T240,40 L240,80 L0,80 Z" fill="#1f3656" opacity="0.7"/>
+    </svg>
+    <svg class="wave w3" preserveAspectRatio="none" viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0,40 Q60,5 120,40 T240,40 L240,80 L0,80 Z" fill="#0c1a2e"/>
+    </svg>
+  </div>
+
+  <div class="headline">
+    <div class="eyebrow">A living dashboard</div>
+    <h1 class="title">Your position is <em>alive</em>.<br/>It buys when you sleep.</h1>
+    <p class="subtitle">Each tide brings a little CLAWD home. You set the rhythm; the keepers do the swimming.</p>
+  </div>
+
+  <div class="tide-meta">
+    Phase
+    <strong id="phaseLabel">Twilight</strong>
+    Next tide in <span id="countdown">— —</span>
+  </div>
+
+  <div class="cadence">
+    <div class="label">Tide rhythm</div>
+    <button class="cad-btn" data-sec="3">Every 3h</button>
+    <button class="cad-btn active" data-sec="5">Daily</button>
+    <button class="cad-btn" data-sec="9">Weekly</button>
+  </div>
+
+  <div class="pool">
+    <div class="water"></div>
+    <div class="ripple" id="ripple"></div>
+    <div class="lobster">🦞</div>
+  </div>
+
+  <div class="panel">
+    <div class="cell">
+      <div class="k">Deposit</div>
+      <div class="v">$1,000</div>
+      <div class="sub">USDC, on Base</div>
+    </div>
+    <div class="cell">
+      <div class="k">Tides taken</div>
+      <div class="v" id="tidesTaken">0</div>
+      <div class="sub">since you began</div>
+    </div>
+    <div class="cell">
+      <div class="k">CLAWD gathered</div>
+      <div class="v pearl" id="clawdGathered">0.00</div>
+      <div class="sub">accruing</div>
+    </div>
+    <div class="cell">
+      <div class="k">Avg. price</div>
+      <div class="v" id="avgPrice">—</div>
+      <div class="sub">smoothed by time</div>
+    </div>
+    <div class="cell cta-cell">
+      <a class="cta" href="/create">
+        Begin your tide
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="below">
+  <div class="inner">
+    <h2>The market is weather.<br/><em>You are the lighthouse.</em></h2>
+    <p>You don't have to predict the tide. You only have to keep showing up. CLAWD DCA turns one decision — how often, how much — into a steady flow of small, automated buys on Uniswap V3. Permissionless keepers run each swap; you keep walking the beach.</p>
+
+    <div class="three">
+      <div class="feature">
+        <div class="num">i.</div>
+        <h3>Set the rhythm.</h3>
+        <p>Every 3 hours, every day, every week, or any custom interval. Pick once. Change it later.</p>
+      </div>
+      <div class="feature">
+        <div class="num">ii.</div>
+        <h3>Keepers do the swimming.</h3>
+        <p>Anyone can call <code>executeDCA</code> when a position is ripe. They earn 0.39% USDC; you stay offline.</p>
+      </div>
+      <div class="feature">
+        <div class="num">iii.</div>
+        <h3>Withdraw with the tide.</h3>
+        <p>Pull accrued CLAWD whenever. Close the position completely whenever. No lockups. No drama.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">CLAWD DCA · Base · Uniswap V3 · contract <code>0x8c81…F088</code> · not financial advice</div>
+
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const sky = stage.querySelector('.sky');
+  const sea = stage.querySelector('.sea');
+  const stars = stage.querySelector('.stars');
+  const celest = document.getElementById('celestial');
+  const lobsterPool = document.querySelector('.pool');
+  const ripple = document.getElementById('ripple');
+  const tidesEl = document.getElementById('tidesTaken');
+  const clawdEl = document.getElementById('clawdGathered');
+  const avgEl = document.getElementById('avgPrice');
+  const phaseEl = document.getElementById('phaseLabel');
+  const countdownEl = document.getElementById('countdown');
+  const cadenceWrap = document.querySelector('.cadence');
+  const bubbles = document.getElementById('bubbles');
+
+  // Bubbles
+  for (let i = 0; i < 14; i++) {
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    b.style.left = (Math.random() * 100) + '%';
+    b.style.setProperty('--dur', (5 + Math.random() * 10) + 's');
+    b.style.animationDelay = (Math.random() * 8) + 's';
+    b.style.width = (4 + Math.random() * 8) + 'px';
+    b.style.height = b.style.width;
+    bubbles.appendChild(b);
+  }
+
+  // Phases — cycle through them slowly to feel "alive"
+  const phases = [
+    {
+      name: 'Dawn',
+      sky: { top: '#1a1f3a', mid: '#d18a6a', bot: '#f3c08a' },
+      sea: { top: '#5a6f9a', bot: '#1a2b4a' },
+      celest: { x: '8%', y: '60%', c: '#fff5d6', c2: '#f4c378', glow: 'rgba(255,200,120,0.55)' },
+      stars: 0,
+      bg: '#3a3450',
+    },
+    {
+      name: 'Day',
+      sky: { top: '#6fb1d1', mid: '#a5d3e6', bot: '#dbeaef' },
+      sea: { top: '#3a78a3', bot: '#0e2a44' },
+      celest: { x: '60%', y: '14%', c: '#fff8dc', c2: '#f4dc78', glow: 'rgba(255,240,180,0.6)' },
+      stars: 0,
+      bg: '#7fb9d7',
+    },
+    {
+      name: 'Dusk',
+      sky: { top: '#2b3a5a', mid: '#b46d62', bot: '#e0a479' },
+      sea: { top: '#3d4a72', bot: '#0c1a2e' },
+      celest: { x: '88%', y: '58%', c: '#ffd9a8', c2: '#cf6f4a', glow: 'rgba(207,111,74,0.5)' },
+      stars: 0.3,
+      bg: '#3a2d44',
+    },
+    {
+      name: 'Night',
+      sky: { top: '#08111e', mid: '#1d2a44', bot: '#2b3a5a' },
+      sea: { top: '#1d3050', bot: '#07121f' },
+      celest: { x: '76%', y: '20%', c: '#e8eef6', c2: '#9eb0c9', glow: 'rgba(220,230,245,0.4)' },
+      stars: 1,
+      bg: '#08111e',
+    },
+  ];
+
+  let phaseIdx = 3;
+  function applyPhase(p) {
+    sky.style.setProperty('--sky-top', p.sky.top);
+    sky.style.setProperty('--sky-mid', p.sky.mid);
+    sky.style.setProperty('--sky-bot', p.sky.bot);
+    sea.style.setProperty('--sea-top', p.sea.top);
+    sea.style.setProperty('--sea-bot', p.sea.bot);
+    stars.style.setProperty('--stars-op', p.stars);
+    celest.style.setProperty('--celest-x', p.celest.x);
+    celest.style.setProperty('--celest-y', p.celest.y);
+    celest.style.setProperty('--celest-c', p.celest.c);
+    celest.style.setProperty('--celest-c2', p.celest.c2);
+    celest.style.setProperty('--celest-glow', p.celest.glow);
+    document.body.style.background = p.bg;
+    phaseEl.textContent = p.name;
+  }
+  applyPhase(phases[phaseIdx]);
+  setInterval(() => {
+    phaseIdx = (phaseIdx + 1) % phases.length;
+    applyPhase(phases[phaseIdx]);
+  }, 18000);
+
+  // Tide engine — each tide is one "swap"
+  const state = {
+    cadenceSec: 5,
+    tides: 0,
+    clawd: 0,
+    pricesPaid: [],
+    timer: null,
+    countdown: null,
+  };
+
+  function setCadence(sec) {
+    state.cadenceSec = sec;
+    restart();
+  }
+  cadenceWrap.addEventListener('click', (e) => {
+    const b = e.target.closest('.cad-btn');
+    if (!b) return;
+    cadenceWrap.querySelectorAll('.cad-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    setCadence(Number(b.dataset.sec));
+  });
+
+  function tide() {
+    // ripple
+    ripple.classList.remove('go');
+    void ripple.offsetWidth;
+    ripple.classList.add('go');
+
+    // a pearl rises
+    const pearl = document.createElement('div');
+    pearl.className = 'pearl';
+    pearl.style.setProperty('--px', (40 + Math.random() * 20) + '%');
+    lobsterPool.appendChild(pearl);
+    setTimeout(() => pearl.remove(), 3600);
+
+    // simulated price walk
+    const lastPrice = state.pricesPaid.length ? state.pricesPaid[state.pricesPaid.length - 1] : 0.0042;
+    const drift = (Math.random() - 0.5) * 0.0006;
+    const price = Math.max(0.001, lastPrice + drift);
+    const usdcPerTide = 50;
+    const clawdGained = usdcPerTide / price;
+    state.tides += 1;
+    state.clawd += clawdGained;
+    state.pricesPaid.push(price);
+
+    tidesEl.textContent = state.tides.toLocaleString();
+    clawdEl.textContent = (state.clawd).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    const avg = state.pricesPaid.reduce((a, b) => a + b, 0) / state.pricesPaid.length;
+    avgEl.textContent = '$' + avg.toFixed(4);
+  }
+
+  function startCountdown() {
+    let s = state.cadenceSec;
+    countdownEl.textContent = s + 's';
+    clearInterval(state.countdown);
+    state.countdown = setInterval(() => {
+      s -= 1;
+      if (s < 0) { countdownEl.textContent = '— —'; clearInterval(state.countdown); return; }
+      countdownEl.textContent = s + 's';
+    }, 1000);
+  }
+
+  function restart() {
+    clearInterval(state.timer);
+    clearInterval(state.countdown);
+    startCountdown();
+    state.timer = setInterval(() => {
+      tide();
+      startCountdown();
+    }, state.cadenceSec * 1000);
+  }
+
+  // First tide quickly so the dashboard feels alive
+  setTimeout(() => { tide(); restart(); }, 1200);
+})();
+</script>
+</body>
+</html>

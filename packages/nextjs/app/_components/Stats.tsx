@@ -65,10 +65,10 @@ const StatsPage: NextPage = () => {
   const stillLoading = createdLoading || executedLoading;
 
   return (
-    <div className="max-w-5xl w-full mx-auto px-4 py-8 flex flex-col gap-6">
-      <header className="flex flex-col gap-1 text-center">
-        <h1 className="text-3xl font-bold my-0">Engine Stats</h1>
-        <p className="opacity-80 my-0">All-time activity, derived from on-chain events.</p>
+    <div className="max-w-5xl w-full mx-auto px-4 py-10 sm:py-14 flex flex-col gap-8">
+      <header className="flex flex-col gap-1.5 text-center">
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight my-0">Engine Stats</h1>
+        <p className="opacity-70 my-0 text-base">All-time activity, derived from on-chain events.</p>
       </header>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -81,9 +81,9 @@ const StatsPage: NextPage = () => {
         <StatCard label="Protocol fees" value={`$${formatUsdc(totalProtocolFees)}`} />
       </div>
 
-      <div className="card bg-base-100 shadow-sm border border-base-300">
-        <div className="card-body gap-3">
-          <h2 className="text-xl font-bold my-0">Top Keepers</h2>
+      <div className="card">
+        <div className="card-body gap-3 p-5 sm:p-6">
+          <h2 className="text-xl sm:text-2xl font-bold my-0 tracking-tight">Top Keepers</h2>
           {stillLoading && (
             <div className="text-center opacity-70">
               <span className="loading loading-spinner loading-md" />
@@ -121,10 +121,10 @@ const StatsPage: NextPage = () => {
 };
 
 const StatCard = ({ label, value }: { label: string; value: string }) => (
-  <div className="card bg-base-100 shadow-sm border border-base-300">
-    <div className="card-body py-3 px-4">
-      <div className="text-xs opacity-70">{label}</div>
-      <div className="text-lg font-bold">{value}</div>
+  <div className="card">
+    <div className="card-body py-4 px-5">
+      <div className="text-[11px] opacity-60 uppercase tracking-widest">{label}</div>
+      <div className="text-xl sm:text-2xl font-bold tabular tracking-tight mt-1">{value}</div>
     </div>
   </div>
 );

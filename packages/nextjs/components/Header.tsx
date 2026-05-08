@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RainbowKitCustomConnectButton } from "~~/components/scaffold-eth";
@@ -12,57 +13,64 @@ const navLinks: { label: string; href: string }[] = [
 ];
 
 /**
- * Site header — minimal nav for CLAWD DCA Engine.
+ * Site header — Uniswap-style: brand on the left, centered pill nav,
+ * connect button on the right.
  */
 export const Header = () => {
   const pathname = usePathname();
 
   return (
-    <div className="sticky lg:static top-0 navbar bg-base-100 min-h-0 shrink-0 justify-between z-20 shadow-md shadow-secondary px-2 sm:px-4">
-      <div className="navbar-start">
-        <Link href="/" passHref className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl">🦞</span>
-          <div className="flex flex-col leading-tight">
-            <span className="font-bold">CLAWD DCA</span>
-            <span className="text-xs opacity-70">Stack CLAWD on autopilot</span>
+    <header className="sticky lg:static top-0 z-20 w-full backdrop-blur-md bg-base-100/70 border-b border-[color:var(--ink-gray-40)]">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 sm:px-6 py-3">
+        <Link href="/" passHref className="flex items-center gap-2.5 shrink-0 group">
+          <span className="relative inline-block w-9 h-9 rounded-full overflow-hidden ring-1 ring-[color:var(--ink-gray-40)] bg-white">
+            <Image
+              src="/clawd-logo.png"
+              alt="CLAWD"
+              fill
+              sizes="36px"
+              className="object-cover transition-transform group-hover:scale-105"
+              priority
+            />
+          </span>
+          <div className="hidden sm:flex flex-col leading-tight">
+            <span className="font-bold text-base">CLAWD DCA</span>
+            <span className="text-[11px] opacity-60 tracking-wide">Stack on autopilot · Base</span>
           </div>
         </Link>
-      </div>
-      <div className="hidden md:flex navbar-center">
-        <ul className="menu menu-horizontal gap-1">
-          {navLinks.map(({ label, href }) => {
-            const isActive = href === "/" ? pathname === "/" : pathname?.startsWith(href);
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  passHref
-                  className={`${
-                    isActive ? "bg-secondary shadow-md" : ""
-                  } hover:bg-secondary hover:shadow-md py-1.5 px-3 text-sm rounded-full`}
-                >
+
+        <nav className="hidden md:flex">
+          <div className="pill-nav">
+            {navLinks.map(({ label, href }) => {
+              const isActive = href === "/" ? pathname === "/" : pathname?.startsWith(href);
+              return (
+                <Link key={href} href={href} passHref className={isActive ? "is-active" : ""}>
                   {label}
                 </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-      <div className="navbar-end gap-2">
-        <div className="md:hidden dropdown dropdown-end">
-          <label tabIndex={0} className="btn btn-ghost btn-sm">
-            Menu
-          </label>
-          <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-30 p-2 shadow bg-base-100 rounded-box w-44">
-            {navLinks.map(({ label, href }) => (
-              <li key={href}>
-                <Link href={href}>{label}</Link>
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </div>
+        </nav>
+
+        <div className="flex items-center gap-2">
+          <div className="md:hidden dropdown dropdown-end">
+            <label tabIndex={0} className="btn btn-ghost btn-sm">
+              Menu
+            </label>
+            <ul
+              tabIndex={0}
+              className="menu menu-sm dropdown-content mt-3 z-30 p-2 shadow-lg bg-base-100 rounded-2xl w-44 border border-[color:var(--ink-gray-40)]"
+            >
+              {navLinks.map(({ label, href }) => (
+                <li key={href}>
+                  <Link href={href}>{label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <RainbowKitCustomConnectButton />
         </div>
-        <RainbowKitCustomConnectButton />
       </div>
-    </div>
+    </header>
   );
 };

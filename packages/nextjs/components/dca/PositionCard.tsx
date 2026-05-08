@@ -290,7 +290,7 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
 
   if (!tuple) {
     return (
-      <div className="card bg-base-100 shadow-md">
+      <div className="card">
         <div className="card-body">
           <span className="loading loading-spinner loading-sm" /> Loading position #{positionId.toString()}…
         </div>
@@ -299,15 +299,25 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
   }
 
   return (
-    <div className="card bg-base-100 shadow-md">
-      <div className="card-body gap-3">
+    <div className="card">
+      <div className="card-body gap-4 p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <h3 className="card-title text-lg my-0">Position #{positionId.toString()}</h3>
-            <span className={`badge badge-sm ${active ? "badge-success" : "badge-ghost"}`}>
+          <div className="flex items-center gap-2.5">
+            <h3 className="text-lg sm:text-xl font-bold my-0 tracking-tight">Position #{positionId.toString()}</h3>
+            <span
+              className={`chip ${
+                active
+                  ? "!bg-[color:var(--ink-blue-10)] !text-[color:var(--ink-blue-70)] !border-[color:var(--ink-blue-30)]"
+                  : "!bg-[color:var(--ink-gray-10)] !text-[color:var(--ink-gray-80)] !border-[color:var(--ink-gray-40)]"
+              }`}
+            >
               {active ? "Active" : "Inactive"}
             </span>
-            {isRipe && active && <span className="badge badge-sm badge-warning">Ripe</span>}
+            {isRipe && active && (
+              <span className="chip !bg-[color:var(--ink-orange-10)] !text-[color:var(--ink-orange-60)] !border-[color:var(--ink-orange-60)]">
+                Ripe
+              </span>
+            )}
           </div>
           {!isOwner && owner && (
             <div className="text-xs opacity-70 flex items-center gap-1">
@@ -317,53 +327,57 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm tabular">
           <div>
-            <div className="opacity-70 text-xs">USDC remaining</div>
-            <div className="font-semibold">${formatUsdc(usdcBalance)}</div>
+            <div className="opacity-60 text-[11px] uppercase tracking-wide">USDC remaining</div>
+            <div className="font-semibold text-base mt-0.5">${formatUsdc(usdcBalance)}</div>
           </div>
           <div>
-            <div className="opacity-70 text-xs">CLAWD accrued</div>
-            <div className="font-semibold">{formatClawd(clawdAccrued)}</div>
+            <div className="opacity-60 text-[11px] uppercase tracking-wide">CLAWD accrued</div>
+            <div className="font-semibold text-base mt-0.5">{formatClawd(clawdAccrued)}</div>
           </div>
           <div>
-            <div className="opacity-70 text-xs">Amount per swap</div>
-            <div className="font-semibold">${formatUsdc(amountPerSwap)}</div>
+            <div className="opacity-60 text-[11px] uppercase tracking-wide">Amount per swap</div>
+            <div className="font-semibold text-base mt-0.5">${formatUsdc(amountPerSwap)}</div>
           </div>
           <div>
-            <div className="opacity-70 text-xs">Cadence</div>
-            <div className="font-semibold">{intervalLabel(intervalInEpochs ?? 0n)}</div>
+            <div className="opacity-60 text-[11px] uppercase tracking-wide">Cadence</div>
+            <div className="font-semibold text-base mt-0.5">{intervalLabel(intervalInEpochs ?? 0n)}</div>
           </div>
           <div>
-            <div className="opacity-70 text-xs">Next execution</div>
-            <div className="font-semibold">{active ? formatCountdown(countdownSeconds) : "—"}</div>
+            <div className="opacity-60 text-[11px] uppercase tracking-wide">Next execution</div>
+            <div className="font-semibold text-base mt-0.5">{active ? formatCountdown(countdownSeconds) : "—"}</div>
           </div>
           <div>
-            <div className="opacity-70 text-xs">Executions left</div>
-            <div className="font-semibold">{executionsRemaining.toString()}</div>
+            <div className="opacity-60 text-[11px] uppercase tracking-wide">Executions left</div>
+            <div className="font-semibold text-base mt-0.5">{executionsRemaining.toString()}</div>
           </div>
           <div>
-            <div className="opacity-70 text-xs">Estimated end</div>
-            <div className="font-semibold">{estimatedEndDate ? estimatedEndDate.toLocaleDateString() : "—"}</div>
+            <div className="opacity-60 text-[11px] uppercase tracking-wide">Estimated end</div>
+            <div className="font-semibold text-base mt-0.5">
+              {estimatedEndDate ? estimatedEndDate.toLocaleDateString() : "—"}
+            </div>
           </div>
           <div>
-            <div className="opacity-70 text-xs">Slippage</div>
-            <div className="font-semibold">{formatBps(slippageBps)}</div>
+            <div className="opacity-60 text-[11px] uppercase tracking-wide">Slippage</div>
+            <div className="font-semibold text-base mt-0.5">{formatBps(slippageBps)}</div>
           </div>
         </div>
 
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between text-xs opacity-70">
             <span>
               Progress: {executionsCompleted.toString()} swap{executionsCompleted === 1n ? "" : "s"} done
               {executionsRemaining > 0n ? `, ${executionsRemaining.toString()} to go` : ""}
             </span>
-            <span>{progressPct.toFixed(1)}%</span>
+            <span className="tabular font-semibold">{progressPct.toFixed(1)}%</span>
           </div>
-          <progress className="progress progress-primary w-full" value={progressPct} max={100} />
+          <div className="w-full h-2 rounded-full bg-[color:var(--ink-gray-10)] overflow-hidden">
+            <div className="h-full bg-[color:var(--ink-blue-70)] transition-all" style={{ width: `${progressPct}%` }} />
+          </div>
         </div>
 
-        {isOwner && active && (
+        {isOwner && (active || (clawdAccrued ?? 0n) > 0n) && (
           <div className="flex flex-wrap gap-2 mt-2">
             {clawdAccrued !== undefined && clawdAccrued > 0n && (
               <button
@@ -375,26 +389,30 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
                 Withdraw CLAWD
               </button>
             )}
-            <button
-              className="btn btn-sm"
-              disabled={topUpBusy || wrongNetwork}
-              onClick={() => setTopUpOpen(prev => !prev)}
-            >
-              Top Up USDC
-            </button>
-            <button
-              className="btn btn-sm btn-error btn-outline"
-              disabled={closeBusy || wrongNetwork}
-              onClick={handleClose}
-            >
-              {closeBusy ? <span className="loading loading-spinner loading-xs" /> : null}
-              Close Position
-            </button>
+            {active && (
+              <>
+                <button
+                  className="btn btn-sm"
+                  disabled={topUpBusy || wrongNetwork}
+                  onClick={() => setTopUpOpen(prev => !prev)}
+                >
+                  Top Up USDC
+                </button>
+                <button
+                  className="btn btn-sm btn-error btn-outline"
+                  disabled={closeBusy || wrongNetwork}
+                  onClick={handleClose}
+                >
+                  {closeBusy ? <span className="loading loading-spinner loading-xs" /> : null}
+                  Close Position
+                </button>
+              </>
+            )}
           </div>
         )}
 
         {isOwner && active && topUpOpen && (
-          <div className="bg-base-200 rounded-lg p-3 flex flex-wrap items-end gap-2">
+          <div className="bg-[color:var(--ink-brown-10)] border border-[color:var(--ink-gray-40)] rounded-2xl p-4 flex flex-wrap items-end gap-2">
             <div className="flex-1 min-w-[160px]">
               <label className="text-xs opacity-70">USDC amount to top up</label>
               <input
@@ -422,7 +440,7 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
         )}
 
         {isOwner && active && (
-          <div className="bg-base-200 rounded-lg p-3 flex flex-wrap items-end gap-2">
+          <div className="bg-[color:var(--ink-brown-10)] border border-[color:var(--ink-gray-40)] rounded-2xl p-4 flex flex-wrap items-end gap-2">
             <div className="flex-1 min-w-[160px]">
               <label className="text-xs opacity-70">Adjust slippage (max 10%)</label>
               <input

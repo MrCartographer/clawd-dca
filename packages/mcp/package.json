@@ -1,0 +1,33 @@
+{
+  "name": "@clawd-dca/mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for the CLAWD DCA Engine on Base. Lets AI agents discover positions, simulate swaps, and build calldata for the v3 contract.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "clawd-dca-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "start:http": "MCP_TRANSPORT=http node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "viem": "^2.21.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

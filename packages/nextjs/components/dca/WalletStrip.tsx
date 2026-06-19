@@ -17,10 +17,6 @@ const erc20BalanceAbi = [
 
 /**
  * Wallet strip — connected address + USDC + CLAWD balances + wrong-network nag.
- *
- * The token reads are pinned to chainId: base.id. We don't care what chain the
- * connected wallet is on — these balances always live on Base, and the user
- * can't interact with the DCA contract until they switch to Base anyway.
  */
 export const WalletStrip = () => {
   const { address, chainId, isConnected } = useAccount();
@@ -47,41 +43,39 @@ export const WalletStrip = () => {
 
   if (!isConnected) {
     return (
-      <div className="card">
-        <div className="card-body py-3 px-5 text-sm opacity-80">
-          Connect your wallet to view balances and manage DCA positions.
-        </div>
+      <div className="surface px-4 py-3 text-sm text-[color:var(--text-2)]">
+        <span className="dot dot-pulse text-[color:var(--text-3)] mr-2" /> Connect a wallet to view balances and manage
+        positions.
       </div>
     );
   }
 
   return (
-    <div className="card">
-      <div className="card-body py-3 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
-        <div className="flex items-center gap-2">
-          <span className="opacity-60 text-xs uppercase tracking-wide">Connected</span>
-          <AddressComp address={address} format="short" size="xs" chain={base} />
+    <div className="surface flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 text-sm">
+      <div className="flex items-center gap-2">
+        <span className="dot dot-pulse text-[color:var(--good)]" />
+        <span className="text-[color:var(--text-2)]">Connected</span>
+        <AddressComp address={address} format="short" size="xs" chain={base} />
+      </div>
+      <div className="flex items-center gap-5">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[color:var(--text-2)] text-xs">USDC</span>
+          <span className="font-semibold tabular">${formatUsdc(usdcBalance as bigint | undefined)}</span>
         </div>
-        <div className="flex items-center gap-5 tabular">
-          <div className="flex items-baseline gap-1.5">
-            <span className="opacity-60 text-xs">USDC</span>
-            <span className="font-semibold">${formatUsdc(usdcBalance as bigint | undefined)}</span>
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="opacity-60 text-xs">CLAWD</span>
-            <span className="font-semibold">{formatClawd(clawdBalance as bigint | undefined)}</span>
-          </div>
-          {wrongNetwork && (
-            <button
-              className="btn btn-warning btn-xs"
-              disabled={isSwitching}
-              onClick={() => switchChain({ chainId: base.id })}
-            >
-              {isSwitching ? <span className="loading loading-spinner loading-xs" /> : null}
-              Switch to Base
-            </button>
-          )}
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[color:var(--text-2)] text-xs">CLAWD</span>
+          <span className="font-semibold tabular">{formatClawd(clawdBalance as bigint | undefined)}</span>
         </div>
+        {wrongNetwork && (
+          <button
+            className="btn btn-warning btn-xs"
+            disabled={isSwitching}
+            onClick={() => switchChain({ chainId: base.id })}
+          >
+            {isSwitching ? <span className="loading loading-spinner loading-xs" /> : null}
+            Switch to Base
+          </button>
+        )}
       </div>
     </div>
   );

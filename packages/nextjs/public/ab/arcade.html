@@ -1,602 +1,815 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>CLAWD ARCADE — drop the claw, win the bag</title>
-<meta name="description" content="A virtual claw machine that grabs CLAWD on a schedule. Insert USDC, set the cadence, watch it work." />
-<link rel="icon" href="/clawd-logo.png" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #0a0717;
-    --bg-2: #15102b;
-    --neon: #ff3ea5;
-    --neon-2: #00e5ff;
-    --neon-3: #ffd166;
-    --crt: #1a1335;
-    --metal: #b8c0cc;
-    --metal-d: #5a6473;
-    --metal-l: #e6ecf4;
-    --pad: #2a2150;
-    --ok: #4ade80;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; }
-  body {
-    background:
-      radial-gradient(ellipse at 50% 0%, #2a1957 0%, transparent 60%),
-      radial-gradient(ellipse at 50% 100%, #3a0d4a 0%, transparent 60%),
-      var(--bg);
-    color: var(--neon-2);
-    font-family: 'VT323', monospace;
-    min-height: 100vh; overflow-x: hidden;
-    display: flex; flex-direction: column; align-items: center;
-    padding: 28px 16px;
-  }
-  /* CRT scanlines + vignette */
-  body::after {
-    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 100;
-    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 1px, transparent 1px, transparent 3px);
-    mix-blend-mode: multiply;
-  }
-  body::before {
-    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 101;
-    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
-  }
-
-  .marquee {
-    font-family: 'Press Start 2P', monospace;
-    color: var(--neon);
-    text-shadow: 0 0 8px var(--neon), 0 0 22px var(--neon);
-    font-size: clamp(18px, 3.6vw, 36px);
-    letter-spacing: 0.06em;
-    text-align: center;
-    padding: 8px 18px;
-    margin-bottom: 4px;
-    animation: flicker 4s infinite;
-  }
-  .submarq {
-    font-family: 'Press Start 2P', monospace;
-    color: var(--neon-3);
-    text-shadow: 0 0 6px var(--neon-3);
-    font-size: 10px;
-    letter-spacing: 0.3em;
-    text-align: center;
-    margin-bottom: 22px;
-  }
-  @keyframes flicker {
-    0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity: 1; }
-    20%, 24%, 55% { opacity: 0.6; }
-  }
-
-  .cabinet {
-    width: min(880px, 100%);
-    background: linear-gradient(180deg, #1d1340 0%, #120a2b 100%);
-    border: 4px solid #2c1f5e;
-    border-radius: 18px;
-    box-shadow:
-      0 0 0 2px #000 inset,
-      0 0 24px rgba(255,62,165,0.25),
-      0 0 60px rgba(0,229,255,0.18);
-    padding: 18px;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-
-  /* Game window */
-  .game {
-    position: relative;
-    background: linear-gradient(180deg, #07091e 0%, #04030f 100%);
-    border-radius: 12px;
-    height: clamp(360px, 56vh, 520px);
-    overflow: hidden;
-    border: 2px solid #1f1448;
-  }
-  .game::before { /* glass shine */
-    content: ''; position: absolute; inset: 0;
-    background: linear-gradient(115deg, rgba(255,255,255,0.06) 0%, transparent 35%, transparent 65%, rgba(255,255,255,0.04) 100%);
-    pointer-events: none;
-  }
-  .rail {
-    position: absolute; top: 18px; left: 18px; right: 18px; height: 6px;
-    background: linear-gradient(180deg, var(--metal-l), var(--metal-d));
-    border-radius: 3px;
-  }
-  .gantry {
-    position: absolute; top: 18px;
-    width: 26px; height: 6px;
-    background: var(--metal-l); border-radius: 2px;
-    transform: translateX(0px);
-    transition: transform 1.2s cubic-bezier(.45,.05,.55,.95);
-  }
-  .cable {
-    position: absolute; top: 24px;
-    width: 2px; background: var(--metal);
-    height: 60px;
-    transition: height 0.6s cubic-bezier(.45,.05,.55,.95);
-  }
-  .claw {
-    position: absolute; width: 44px; height: 28px;
-    transition: top 0.6s cubic-bezier(.45,.05,.55,.95);
-  }
-  .claw svg { width: 100%; height: 100%; overflow: visible; }
-  .claw .arm { transform-origin: 22px 4px; transition: transform 0.3s; }
-  .claw.closed .arm-l { transform: rotate(28deg); }
-  .claw.closed .arm-r { transform: rotate(-28deg); }
-
-  .pile {
-    position: absolute; left: 0; right: 0; bottom: 36px;
-    height: 80px;
-  }
-  .token {
-    position: absolute;
-    width: 28px; height: 28px; border-radius: 50%;
-    background: radial-gradient(circle at 30% 30%, #ffd166, #c47b1f 60%, #6b3d04);
-    box-shadow: 0 0 6px rgba(255,209,102,0.7), inset 0 0 4px rgba(0,0,0,0.4);
-    display: flex; align-items: center; justify-content: center;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 9px; color: #6b3d04;
-    transition: transform 0.6s cubic-bezier(.45,.05,.55,.95), opacity 0.3s;
-    user-select: none;
-  }
-  .token.lifted { transition: top 0.8s cubic-bezier(.45,.05,.55,.95), left 0.8s cubic-bezier(.45,.05,.55,.95); }
-
-  .floor {
-    position: absolute; left: 0; right: 0; bottom: 0; height: 36px;
-    background: linear-gradient(180deg, #0a1a3a 0%, #050b1f 100%);
-    border-top: 2px solid #1c2a4d;
-  }
-  .chute {
-    position: absolute; bottom: 0; left: 18px;
-    width: 64px; height: 70px;
-    background: linear-gradient(180deg, #2a1957 0%, #150a2c 100%);
-    border-top-right-radius: 18px;
-    border-right: 2px solid var(--neon);
-    box-shadow: inset 4px 0 12px rgba(255,62,165,0.4);
-  }
-  .chute-label {
-    position: absolute; bottom: 6px; left: 22px;
-    font-family: 'Press Start 2P', monospace;
-    color: var(--neon); font-size: 8px;
-    text-shadow: 0 0 6px var(--neon);
-    letter-spacing: 0.15em;
-  }
-
-  .hud {
-    position: absolute; top: 12px; right: 14px;
-    background: rgba(0,0,0,0.55);
-    border: 1px solid var(--neon-2);
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-family: 'Press Start 2P', monospace; font-size: 10px;
-    color: var(--neon-2);
-    text-shadow: 0 0 6px var(--neon-2);
-    line-height: 1.7;
-    min-width: 150px;
-  }
-  .hud .row { display: flex; justify-content: space-between; gap: 12px; }
-  .hud .row .v { color: var(--neon-3); text-shadow: 0 0 6px var(--neon-3); }
-
-  .toast {
-    position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%) scale(0.6);
-    font-family: 'Press Start 2P', monospace;
-    color: var(--neon-3);
-    text-shadow: 0 0 10px var(--neon-3), 0 0 22px var(--neon);
-    font-size: clamp(20px, 4vw, 36px);
-    opacity: 0; pointer-events: none;
-    transition: transform 0.4s, opacity 0.4s;
-  }
-  .toast.show { transform: translate(-50%, -60%) scale(1); opacity: 1; }
-
-  /* Controls */
-  .controls {
-    background: linear-gradient(180deg, #1c1340 0%, #0e0824 100%);
-    border-radius: 12px;
-    padding: 18px;
-    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
-    border: 2px solid #2c1f5e;
-  }
-  @media (max-width: 640px) { .controls { grid-template-columns: 1fr; } }
-
-  .ctrl-block { padding: 10px; }
-  .label {
-    font-family: 'Press Start 2P', monospace;
-    color: var(--neon-2); font-size: 10px; letter-spacing: 0.18em;
-    text-shadow: 0 0 6px var(--neon-2);
-    margin-bottom: 12px;
-  }
-
-  .coin-slot { display: flex; align-items: center; gap: 12px; }
-  .coin-amount {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 22px; color: var(--neon-3); text-shadow: 0 0 8px var(--neon-3);
-    min-width: 110px;
-  }
-  input[type=range] {
-    -webkit-appearance: none; appearance: none;
-    flex: 1; height: 6px; background: #2c1f5e; border-radius: 3px; outline: none;
-  }
-  input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 18px; height: 18px; background: var(--neon-3); border-radius: 50%;
-    box-shadow: 0 0 8px var(--neon-3); cursor: pointer; border: 2px solid #fff;
-  }
-  input[type=range]::-moz-range-thumb {
-    width: 18px; height: 18px; background: var(--neon-3); border-radius: 50%;
-    box-shadow: 0 0 8px var(--neon-3); cursor: pointer; border: 2px solid #fff;
-  }
-
-  .cadence { display: flex; gap: 8px; flex-wrap: wrap; }
-  .cad-btn {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 10px;
-    padding: 10px 12px;
-    background: transparent;
-    color: var(--neon-2);
-    border: 2px solid var(--neon-2);
-    border-radius: 6px;
-    cursor: pointer;
-    text-shadow: 0 0 6px var(--neon-2);
-    letter-spacing: 0.1em;
-    transition: all 0.15s;
-  }
-  .cad-btn:hover { background: rgba(0,229,255,0.12); }
-  .cad-btn.active {
-    background: var(--neon-2); color: #06121a; text-shadow: none;
-    box-shadow: 0 0 12px var(--neon-2);
-  }
-
-  .panel-bottom {
-    display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    padding: 16px 18px;
-    background: linear-gradient(180deg, #1c1340 0%, #0e0824 100%);
-    border-radius: 12px;
-    border: 2px solid #2c1f5e;
-    flex-wrap: wrap;
-  }
-  .stats-mini { display: flex; gap: 18px; flex-wrap: wrap; }
-  .stat {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 9px; letter-spacing: 0.12em;
-    color: var(--neon-2); text-shadow: 0 0 6px var(--neon-2);
-  }
-  .stat .v { color: var(--neon-3); text-shadow: 0 0 6px var(--neon-3); font-size: 14px; display: block; margin-top: 6px; }
-
-  .play-row { display: flex; gap: 10px; }
-  .btn {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 12px; letter-spacing: 0.12em;
-    padding: 14px 22px;
-    background: var(--neon);
-    color: #1a0510;
-    border: none; border-radius: 6px;
-    cursor: pointer;
-    box-shadow: 0 0 12px var(--neon), 0 4px 0 #8a1d5a;
-    transition: transform 0.08s, box-shadow 0.08s;
-  }
-  .btn:hover { transform: translateY(-1px); box-shadow: 0 0 18px var(--neon), 0 5px 0 #8a1d5a; }
-  .btn:active { transform: translateY(2px); box-shadow: 0 0 12px var(--neon), 0 1px 0 #8a1d5a; }
-  .btn.ghost {
-    background: transparent; color: var(--neon); box-shadow: none;
-    border: 2px solid var(--neon);
-  }
-
-  .footer-cta {
-    margin-top: 22px;
-    text-align: center;
-    width: min(880px, 100%);
-  }
-  .footer-cta a {
-    font-family: 'Press Start 2P', monospace;
-    color: var(--neon-3); text-decoration: none;
-    text-shadow: 0 0 8px var(--neon-3);
-    font-size: 14px; letter-spacing: 0.18em;
-    border-bottom: 2px solid var(--neon-3);
-    padding-bottom: 4px;
-  }
-  .footer-cta .small {
-    margin-top: 10px;
-    font-family: 'VT323', monospace;
-    color: rgba(255,255,255,0.55);
-    font-size: 16px;
-  }
-
-  .skip {
-    position: fixed; top: 18px; right: 18px; z-index: 60;
-    font-family: 'Press Start 2P', monospace;
-    color: var(--neon-2); font-size: 9px; letter-spacing: 0.18em;
-    text-decoration: none; text-shadow: 0 0 6px var(--neon-2);
-    border-bottom: 1px solid var(--neon-2); padding-bottom: 2px;
-  }
-
-  /* Lobster mascot in chute */
-  .mascot {
-    position: absolute; bottom: 4px; left: 22px; font-size: 28px; transform: rotate(-12deg);
-    filter: drop-shadow(0 0 6px rgba(255,62,165,0.6));
-    pointer-events: none;
-  }
-</style>
-</head>
-<body>
-
-<a class="skip" href="/create">SKIP &gt; CREATE</a>
-
-<div class="marquee">CLAWD ARCADE</div>
-<div class="submarq">*** PERMISSIONLESS DCA · INSERT USDC TO PLAY ***</div>
-
-<div class="cabinet">
-  <div class="game" id="game">
-    <div class="rail"></div>
-    <div class="gantry" id="gantry"></div>
-    <div class="cable" id="cable"></div>
-    <div class="claw" id="claw">
-      <svg viewBox="0 0 44 28">
-        <rect x="18" y="0" width="8" height="6" fill="#e6ecf4"/>
-        <g class="arm arm-l">
-          <path d="M22,4 L8,22 L14,24 L22,10 Z" fill="#b8c0cc" stroke="#5a6473" stroke-width="1"/>
-        </g>
-        <g class="arm arm-r">
-          <path d="M22,4 L36,22 L30,24 L22,10 Z" fill="#b8c0cc" stroke="#5a6473" stroke-width="1"/>
-        </g>
-      </svg>
-    </div>
-
-    <div class="pile" id="pile"></div>
-    <div class="floor"></div>
-    <div class="chute"><div class="chute-label">PRIZE</div><span class="mascot">🦞</span></div>
-
-    <div class="hud">
-      <div class="row"><span>SCORE</span><span class="v" id="score">0</span></div>
-      <div class="row"><span>SWAPS</span><span class="v" id="swaps">0</span></div>
-      <div class="row"><span>NEXT</span><span class="v" id="next">--</span></div>
-    </div>
-
-    <div class="toast" id="toast">+1 CLAWD</div>
-  </div>
-
-  <div class="controls">
-    <div class="ctrl-block">
-      <div class="label">[1] INSERT USDC</div>
-      <div class="coin-slot">
-        <div class="coin-amount" id="coinAmount">$500</div>
-        <input type="range" min="50" max="10000" step="50" value="500" id="coin">
-      </div>
-    </div>
-    <div class="ctrl-block">
-      <div class="label">[2] DROP CADENCE</div>
-      <div class="cadence" id="cadence">
-        <button class="cad-btn" data-sec="3" data-label="3H">3H</button>
-        <button class="cad-btn active" data-sec="5" data-label="24H">24H</button>
-        <button class="cad-btn" data-sec="10" data-label="7D">7D</button>
-        <button class="cad-btn" data-sec="2" data-label="DEMO">DEMO</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="panel-bottom">
-    <div class="stats-mini">
-      <div class="stat">DEPOSIT<span class="v" id="depositStat">$500.00</span></div>
-      <div class="stat">PER DROP<span class="v" id="perDrop">$25.00</span></div>
-      <div class="stat">KEEPER FEE<span class="v">0.39%</span></div>
-      <div class="stat">PROTOCOL<span class="v">0.10%</span></div>
-    </div>
-    <div class="play-row">
-      <button class="btn ghost" id="reset">RESET</button>
-      <button class="btn" id="play">▶ PLAY</button>
-    </div>
-  </div>
-</div>
-
-<div class="footer-cta">
-  <a href="/create">PLAY FOR REAL ▸ CREATE A POSITION</a>
-  <div class="small">No coins consumed in this demo. Real positions run on-chain via Uniswap V3 on Base.</div>
-</div>
-
-<script>
-(() => {
-  const game = document.getElementById('game');
-  const gantry = document.getElementById('gantry');
-  const cable = document.getElementById('cable');
-  const claw = document.getElementById('claw');
-  const pile = document.getElementById('pile');
-  const score = document.getElementById('score');
-  const swaps = document.getElementById('swaps');
-  const nextEl = document.getElementById('next');
-  const toast = document.getElementById('toast');
-  const coin = document.getElementById('coin');
-  const coinAmount = document.getElementById('coinAmount');
-  const depositStat = document.getElementById('depositStat');
-  const perDrop = document.getElementById('perDrop');
-  const playBtn = document.getElementById('play');
-  const resetBtn = document.getElementById('reset');
-  const cadenceWrap = document.getElementById('cadence');
-
-  const state = {
-    cadenceSec: 5,
-    cadenceLabel: '24H',
-    coins: 500,
-    score: 0,
-    swaps: 0,
-    running: false,
-    countdown: null,
-    nextTick: null,
-  };
-
-  function syncCoins() {
-    state.coins = Number(coin.value);
-    coinAmount.textContent = '$' + state.coins.toLocaleString();
-    depositStat.textContent = '$' + state.coins.toFixed(2);
-    perDrop.textContent = '$' + (state.coins / 20).toFixed(2);
-  }
-  coin.addEventListener('input', syncCoins);
-  syncCoins();
-
-  cadenceWrap.addEventListener('click', (e) => {
-    const b = e.target.closest('.cad-btn');
-    if (!b) return;
-    cadenceWrap.querySelectorAll('.cad-btn').forEach(x => x.classList.remove('active'));
-    b.classList.add('active');
-    state.cadenceSec = Number(b.dataset.sec);
-    state.cadenceLabel = b.dataset.label;
-  });
-
-  // Place tokens in pile
-  function placeTokens() {
-    pile.innerHTML = '';
-    const w = pile.clientWidth;
-    const tokens = [];
-    const count = 14;
-    for (let i = 0; i < count; i++) {
-      const t = document.createElement('div');
-      t.className = 'token';
-      t.textContent = '🦞';
-      t.style.fontSize = '14px';
-      const x = 100 + Math.random() * (w - 200);
-      const y = 30 + Math.random() * 40;
-      t.style.left = x + 'px';
-      t.style.top = y + 'px';
-      pile.appendChild(t);
-      tokens.push({ el: t, x, y });
-    }
-    return tokens;
-  }
-  let tokens = placeTokens();
-  window.addEventListener('resize', () => { tokens = placeTokens(); });
-
-  function setClawX(x) {
-    gantry.style.transform = `translateX(${x - 13}px)`;
-    cable.style.left = (x - 1) + 'px';
-    claw.style.left = (x - 22) + 'px';
-  }
-  function setClawY(y) {
-    cable.style.height = y + 'px';
-    claw.style.top = (y + 18) + 'px';
-  }
-  setClawX(80);
-  setClawY(60);
-
-  function showToast(text) {
-    toast.textContent = text;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 900);
-  }
-
-  async function dropCycle() {
-    if (tokens.length === 0) tokens = placeTokens();
-    // pick a target
-    const target = tokens[Math.floor(Math.random() * tokens.length)];
-    const targetX = target.x + 14;
-    const targetY = target.y + 6;
-
-    // travel to X
-    setClawX(targetX);
-    await wait(1300);
-
-    // descend
-    const gameH = game.clientHeight;
-    setClawY(targetY + 30);
-    await wait(700);
-
-    // close claw + grab token
-    claw.classList.add('closed');
-    target.el.classList.add('lifted');
-    await wait(280);
-
-    // ascend with token attached
-    setClawY(60);
-    moveTokenWithClaw(target, targetX, 60 + 24);
-    await wait(700);
-
-    // travel to chute (left side)
-    const chuteX = 50;
-    setClawX(chuteX);
-    moveTokenWithClaw(target, chuteX, 60 + 24);
-    await wait(1300);
-
-    // open + drop
-    claw.classList.remove('closed');
-    target.el.style.transition = 'top 0.5s cubic-bezier(.55,.05,.7,.95), left 0.5s, opacity 0.5s';
-    target.el.style.top = (gameH - 80) + 'px';
-    target.el.style.left = (chuteX - 14) + 'px';
-    await wait(500);
-    target.el.style.opacity = '0';
-    await wait(200);
-
-    // remove from active tokens
-    tokens = tokens.filter(t => t !== target);
-    setTimeout(() => target.el.remove(), 300);
-
-    // score
-    state.score += 1;
-    state.swaps += 1;
-    score.textContent = state.score;
-    swaps.textContent = state.swaps;
-    showToast('+1 CLAWD');
-  }
-
-  function moveTokenWithClaw(t, x, y) {
-    t.el.style.left = (x - 14) + 'px';
-    t.el.style.top = (y - 14) + 'px';
-  }
-
-  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-  function startCountdown() {
-    let s = state.cadenceSec;
-    nextEl.textContent = s + 's';
-    clearInterval(state.countdown);
-    state.countdown = setInterval(() => {
-      s -= 1;
-      if (s <= 0) {
-        nextEl.textContent = '--';
-        clearInterval(state.countdown);
-      } else {
-        nextEl.textContent = s + 's';
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>CLAWD ARCADE — drop the claw, win the bag</title>
+    <meta
+      name="description"
+      content="A virtual claw machine that grabs CLAWD on a schedule. Insert USDC, set the cadence, watch it work."
+    />
+    <link rel="icon" href="/clawd-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #0a0717;
+        --bg-2: #15102b;
+        --neon: #ff3ea5;
+        --neon-2: #00e5ff;
+        --neon-3: #ffd166;
+        --crt: #1a1335;
+        --metal: #b8c0cc;
+        --metal-d: #5a6473;
+        --metal-l: #e6ecf4;
+        --pad: #2a2150;
+        --ok: #4ade80;
       }
-    }, 1000);
-  }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        background:
+          radial-gradient(ellipse at 50% 0%, #2a1957 0%, transparent 60%),
+          radial-gradient(ellipse at 50% 100%, #3a0d4a 0%, transparent 60%), var(--bg);
+        color: var(--neon-2);
+        font-family: "VT323", monospace;
+        min-height: 100vh;
+        overflow-x: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 28px 16px;
+      }
+      /* CRT scanlines + vignette */
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 100;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(0, 0, 0, 0.18) 0px,
+          rgba(0, 0, 0, 0.18) 1px,
+          transparent 1px,
+          transparent 3px
+        );
+        mix-blend-mode: multiply;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 101;
+        background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+      }
 
-  async function loop() {
-    while (state.running) {
-      startCountdown();
-      await wait(state.cadenceSec * 1000);
-      if (!state.running) break;
-      await dropCycle();
-    }
-  }
+      .marquee {
+        font-family: "Press Start 2P", monospace;
+        color: var(--neon);
+        text-shadow:
+          0 0 8px var(--neon),
+          0 0 22px var(--neon);
+        font-size: clamp(18px, 3.6vw, 36px);
+        letter-spacing: 0.06em;
+        text-align: center;
+        padding: 8px 18px;
+        margin-bottom: 4px;
+        animation: flicker 4s infinite;
+      }
+      .submarq {
+        font-family: "Press Start 2P", monospace;
+        color: var(--neon-3);
+        text-shadow: 0 0 6px var(--neon-3);
+        font-size: 10px;
+        letter-spacing: 0.3em;
+        text-align: center;
+        margin-bottom: 22px;
+      }
+      @keyframes flicker {
+        0%,
+        18%,
+        22%,
+        25%,
+        53%,
+        57%,
+        100% {
+          opacity: 1;
+        }
+        20%,
+        24%,
+        55% {
+          opacity: 0.6;
+        }
+      }
 
-  playBtn.addEventListener('click', () => {
-    if (state.running) {
-      state.running = false;
-      playBtn.textContent = '▶ PLAY';
-      clearInterval(state.countdown);
-      nextEl.textContent = '--';
-    } else {
-      state.running = true;
-      playBtn.textContent = '■ STOP';
-      loop();
-    }
-  });
+      .cabinet {
+        width: min(880px, 100%);
+        background: linear-gradient(180deg, #1d1340 0%, #120a2b 100%);
+        border: 4px solid #2c1f5e;
+        border-radius: 18px;
+        box-shadow:
+          0 0 0 2px #000 inset,
+          0 0 24px rgba(255, 62, 165, 0.25),
+          0 0 60px rgba(0, 229, 255, 0.18);
+        padding: 18px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
 
-  resetBtn.addEventListener('click', () => {
-    state.running = false;
-    state.score = 0;
-    state.swaps = 0;
-    score.textContent = '0';
-    swaps.textContent = '0';
-    nextEl.textContent = '--';
-    clearInterval(state.countdown);
-    playBtn.textContent = '▶ PLAY';
-    tokens = placeTokens();
-    setClawX(80);
-    setClawY(60);
-    claw.classList.remove('closed');
-  });
-})();
-</script>
-</body>
+      /* Game window */
+      .game {
+        position: relative;
+        background: linear-gradient(180deg, #07091e 0%, #04030f 100%);
+        border-radius: 12px;
+        height: clamp(360px, 56vh, 520px);
+        overflow: hidden;
+        border: 2px solid #1f1448;
+      }
+      .game::before {
+        /* glass shine */
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          115deg,
+          rgba(255, 255, 255, 0.06) 0%,
+          transparent 35%,
+          transparent 65%,
+          rgba(255, 255, 255, 0.04) 100%
+        );
+        pointer-events: none;
+      }
+      .rail {
+        position: absolute;
+        top: 18px;
+        left: 18px;
+        right: 18px;
+        height: 6px;
+        background: linear-gradient(180deg, var(--metal-l), var(--metal-d));
+        border-radius: 3px;
+      }
+      .gantry {
+        position: absolute;
+        top: 18px;
+        width: 26px;
+        height: 6px;
+        background: var(--metal-l);
+        border-radius: 2px;
+        transform: translateX(0px);
+        transition: transform 1.2s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+      }
+      .cable {
+        position: absolute;
+        top: 24px;
+        width: 2px;
+        background: var(--metal);
+        height: 60px;
+        transition: height 0.6s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+      }
+      .claw {
+        position: absolute;
+        width: 44px;
+        height: 28px;
+        transition: top 0.6s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+      }
+      .claw svg {
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .claw .arm {
+        transform-origin: 22px 4px;
+        transition: transform 0.3s;
+      }
+      .claw.closed .arm-l {
+        transform: rotate(28deg);
+      }
+      .claw.closed .arm-r {
+        transform: rotate(-28deg);
+      }
+
+      .pile {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 36px;
+        height: 80px;
+      }
+      .token {
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #ffd166, #c47b1f 60%, #6b3d04);
+        box-shadow:
+          0 0 6px rgba(255, 209, 102, 0.7),
+          inset 0 0 4px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Press Start 2P", monospace;
+        font-size: 9px;
+        color: #6b3d04;
+        transition:
+          transform 0.6s cubic-bezier(0.45, 0.05, 0.55, 0.95),
+          opacity 0.3s;
+        user-select: none;
+      }
+      .token.lifted {
+        transition:
+          top 0.8s cubic-bezier(0.45, 0.05, 0.55, 0.95),
+          left 0.8s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+      }
+
+      .floor {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 36px;
+        background: linear-gradient(180deg, #0a1a3a 0%, #050b1f 100%);
+        border-top: 2px solid #1c2a4d;
+      }
+      .chute {
+        position: absolute;
+        bottom: 0;
+        left: 18px;
+        width: 64px;
+        height: 70px;
+        background: linear-gradient(180deg, #2a1957 0%, #150a2c 100%);
+        border-top-right-radius: 18px;
+        border-right: 2px solid var(--neon);
+        box-shadow: inset 4px 0 12px rgba(255, 62, 165, 0.4);
+      }
+      .chute-label {
+        position: absolute;
+        bottom: 6px;
+        left: 22px;
+        font-family: "Press Start 2P", monospace;
+        color: var(--neon);
+        font-size: 8px;
+        text-shadow: 0 0 6px var(--neon);
+        letter-spacing: 0.15em;
+      }
+
+      .hud {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid var(--neon-2);
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-family: "Press Start 2P", monospace;
+        font-size: 10px;
+        color: var(--neon-2);
+        text-shadow: 0 0 6px var(--neon-2);
+        line-height: 1.7;
+        min-width: 150px;
+      }
+      .hud .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .hud .row .v {
+        color: var(--neon-3);
+        text-shadow: 0 0 6px var(--neon-3);
+      }
+
+      .toast {
+        position: absolute;
+        left: 50%;
+        top: 40%;
+        transform: translate(-50%, -50%) scale(0.6);
+        font-family: "Press Start 2P", monospace;
+        color: var(--neon-3);
+        text-shadow:
+          0 0 10px var(--neon-3),
+          0 0 22px var(--neon);
+        font-size: clamp(20px, 4vw, 36px);
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          transform 0.4s,
+          opacity 0.4s;
+      }
+      .toast.show {
+        transform: translate(-50%, -60%) scale(1);
+        opacity: 1;
+      }
+
+      /* Controls */
+      .controls {
+        background: linear-gradient(180deg, #1c1340 0%, #0e0824 100%);
+        border-radius: 12px;
+        padding: 18px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        border: 2px solid #2c1f5e;
+      }
+      @media (max-width: 640px) {
+        .controls {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .ctrl-block {
+        padding: 10px;
+      }
+      .label {
+        font-family: "Press Start 2P", monospace;
+        color: var(--neon-2);
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-shadow: 0 0 6px var(--neon-2);
+        margin-bottom: 12px;
+      }
+
+      .coin-slot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .coin-amount {
+        font-family: "Press Start 2P", monospace;
+        font-size: 22px;
+        color: var(--neon-3);
+        text-shadow: 0 0 8px var(--neon-3);
+        min-width: 110px;
+      }
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        flex: 1;
+        height: 6px;
+        background: #2c1f5e;
+        border-radius: 3px;
+        outline: none;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        background: var(--neon-3);
+        border-radius: 50%;
+        box-shadow: 0 0 8px var(--neon-3);
+        cursor: pointer;
+        border: 2px solid #fff;
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        background: var(--neon-3);
+        border-radius: 50%;
+        box-shadow: 0 0 8px var(--neon-3);
+        cursor: pointer;
+        border: 2px solid #fff;
+      }
+
+      .cadence {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .cad-btn {
+        font-family: "Press Start 2P", monospace;
+        font-size: 10px;
+        padding: 10px 12px;
+        background: transparent;
+        color: var(--neon-2);
+        border: 2px solid var(--neon-2);
+        border-radius: 6px;
+        cursor: pointer;
+        text-shadow: 0 0 6px var(--neon-2);
+        letter-spacing: 0.1em;
+        transition: all 0.15s;
+      }
+      .cad-btn:hover {
+        background: rgba(0, 229, 255, 0.12);
+      }
+      .cad-btn.active {
+        background: var(--neon-2);
+        color: #06121a;
+        text-shadow: none;
+        box-shadow: 0 0 12px var(--neon-2);
+      }
+
+      .panel-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        background: linear-gradient(180deg, #1c1340 0%, #0e0824 100%);
+        border-radius: 12px;
+        border: 2px solid #2c1f5e;
+        flex-wrap: wrap;
+      }
+      .stats-mini {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+      .stat {
+        font-family: "Press Start 2P", monospace;
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        color: var(--neon-2);
+        text-shadow: 0 0 6px var(--neon-2);
+      }
+      .stat .v {
+        color: var(--neon-3);
+        text-shadow: 0 0 6px var(--neon-3);
+        font-size: 14px;
+        display: block;
+        margin-top: 6px;
+      }
+
+      .play-row {
+        display: flex;
+        gap: 10px;
+      }
+      .btn {
+        font-family: "Press Start 2P", monospace;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        padding: 14px 22px;
+        background: var(--neon);
+        color: #1a0510;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        box-shadow:
+          0 0 12px var(--neon),
+          0 4px 0 #8a1d5a;
+        transition:
+          transform 0.08s,
+          box-shadow 0.08s;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+        box-shadow:
+          0 0 18px var(--neon),
+          0 5px 0 #8a1d5a;
+      }
+      .btn:active {
+        transform: translateY(2px);
+        box-shadow:
+          0 0 12px var(--neon),
+          0 1px 0 #8a1d5a;
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--neon);
+        box-shadow: none;
+        border: 2px solid var(--neon);
+      }
+
+      .footer-cta {
+        margin-top: 22px;
+        text-align: center;
+        width: min(880px, 100%);
+      }
+      .footer-cta a {
+        font-family: "Press Start 2P", monospace;
+        color: var(--neon-3);
+        text-decoration: none;
+        text-shadow: 0 0 8px var(--neon-3);
+        font-size: 14px;
+        letter-spacing: 0.18em;
+        border-bottom: 2px solid var(--neon-3);
+        padding-bottom: 4px;
+      }
+      .footer-cta .small {
+        margin-top: 10px;
+        font-family: "VT323", monospace;
+        color: rgba(255, 255, 255, 0.55);
+        font-size: 16px;
+      }
+
+      .skip {
+        position: fixed;
+        top: 18px;
+        right: 18px;
+        z-index: 60;
+        font-family: "Press Start 2P", monospace;
+        color: var(--neon-2);
+        font-size: 9px;
+        letter-spacing: 0.18em;
+        text-decoration: none;
+        text-shadow: 0 0 6px var(--neon-2);
+        border-bottom: 1px solid var(--neon-2);
+        padding-bottom: 2px;
+      }
+
+      /* Lobster mascot in chute */
+      .mascot {
+        position: absolute;
+        bottom: 4px;
+        left: 22px;
+        font-size: 28px;
+        transform: rotate(-12deg);
+        filter: drop-shadow(0 0 6px rgba(255, 62, 165, 0.6));
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="/create">SKIP &gt; CREATE</a>
+
+    <div class="marquee">CLAWD ARCADE</div>
+    <div class="submarq">*** PERMISSIONLESS DCA · INSERT USDC TO PLAY ***</div>
+
+    <div class="cabinet">
+      <div class="game" id="game">
+        <div class="rail"></div>
+        <div class="gantry" id="gantry"></div>
+        <div class="cable" id="cable"></div>
+        <div class="claw" id="claw">
+          <svg viewBox="0 0 44 28">
+            <rect x="18" y="0" width="8" height="6" fill="#e6ecf4" />
+            <g class="arm arm-l">
+              <path d="M22,4 L8,22 L14,24 L22,10 Z" fill="#b8c0cc" stroke="#5a6473" stroke-width="1" />
+            </g>
+            <g class="arm arm-r">
+              <path d="M22,4 L36,22 L30,24 L22,10 Z" fill="#b8c0cc" stroke="#5a6473" stroke-width="1" />
+            </g>
+          </svg>
+        </div>
+
+        <div class="pile" id="pile"></div>
+        <div class="floor"></div>
+        <div class="chute">
+          <div class="chute-label">PRIZE</div>
+          <span class="mascot">🦞</span>
+        </div>
+
+        <div class="hud">
+          <div class="row"><span>SCORE</span><span class="v" id="score">0</span></div>
+          <div class="row"><span>SWAPS</span><span class="v" id="swaps">0</span></div>
+          <div class="row"><span>NEXT</span><span class="v" id="next">--</span></div>
+        </div>
+
+        <div class="toast" id="toast">+1 CLAWD</div>
+      </div>
+
+      <div class="controls">
+        <div class="ctrl-block">
+          <div class="label">[1] INSERT USDC</div>
+          <div class="coin-slot">
+            <div class="coin-amount" id="coinAmount">$500</div>
+            <input type="range" min="50" max="10000" step="50" value="500" id="coin" />
+          </div>
+        </div>
+        <div class="ctrl-block">
+          <div class="label">[2] DROP CADENCE</div>
+          <div class="cadence" id="cadence">
+            <button class="cad-btn" data-sec="3" data-label="3H">3H</button>
+            <button class="cad-btn active" data-sec="5" data-label="24H">24H</button>
+            <button class="cad-btn" data-sec="10" data-label="7D">7D</button>
+            <button class="cad-btn" data-sec="2" data-label="DEMO">DEMO</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-bottom">
+        <div class="stats-mini">
+          <div class="stat">DEPOSIT<span class="v" id="depositStat">$500.00</span></div>
+          <div class="stat">PER DROP<span class="v" id="perDrop">$25.00</span></div>
+          <div class="stat">KEEPER FEE<span class="v">0.39%</span></div>
+          <div class="stat">PROTOCOL<span class="v">0.10%</span></div>
+        </div>
+        <div class="play-row">
+          <button class="btn ghost" id="reset">RESET</button>
+          <button class="btn" id="play">▶ PLAY</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-cta">
+      <a href="/create">PLAY FOR REAL ▸ CREATE A POSITION</a>
+      <div class="small">No coins consumed in this demo. Real positions run on-chain via Uniswap V3 on Base.</div>
+    </div>
+
+    <script>
+      (() => {
+        const game = document.getElementById("game");
+        const gantry = document.getElementById("gantry");
+        const cable = document.getElementById("cable");
+        const claw = document.getElementById("claw");
+        const pile = document.getElementById("pile");
+        const score = document.getElementById("score");
+        const swaps = document.getElementById("swaps");
+        const nextEl = document.getElementById("next");
+        const toast = document.getElementById("toast");
+        const coin = document.getElementById("coin");
+        const coinAmount = document.getElementById("coinAmount");
+        const depositStat = document.getElementById("depositStat");
+        const perDrop = document.getElementById("perDrop");
+        const playBtn = document.getElementById("play");
+        const resetBtn = document.getElementById("reset");
+        const cadenceWrap = document.getElementById("cadence");
+
+        const state = {
+          cadenceSec: 5,
+          cadenceLabel: "24H",
+          coins: 500,
+          score: 0,
+          swaps: 0,
+          running: false,
+          countdown: null,
+          nextTick: null,
+        };
+
+        function syncCoins() {
+          state.coins = Number(coin.value);
+          coinAmount.textContent = "$" + state.coins.toLocaleString();
+          depositStat.textContent = "$" + state.coins.toFixed(2);
+          perDrop.textContent = "$" + (state.coins / 20).toFixed(2);
+        }
+        coin.addEventListener("input", syncCoins);
+        syncCoins();
+
+        cadenceWrap.addEventListener("click", e => {
+          const b = e.target.closest(".cad-btn");
+          if (!b) return;
+          cadenceWrap.querySelectorAll(".cad-btn").forEach(x => x.classList.remove("active"));
+          b.classList.add("active");
+          state.cadenceSec = Number(b.dataset.sec);
+          state.cadenceLabel = b.dataset.label;
+        });
+
+        // Place tokens in pile
+        function placeTokens() {
+          pile.innerHTML = "";
+          const w = pile.clientWidth;
+          const tokens = [];
+          const count = 14;
+          for (let i = 0; i < count; i++) {
+            const t = document.createElement("div");
+            t.className = "token";
+            t.textContent = "🦞";
+            t.style.fontSize = "14px";
+            const x = 100 + Math.random() * (w - 200);
+            const y = 30 + Math.random() * 40;
+            t.style.left = x + "px";
+            t.style.top = y + "px";
+            pile.appendChild(t);
+            tokens.push({ el: t, x, y });
+          }
+          return tokens;
+        }
+        let tokens = placeTokens();
+        window.addEventListener("resize", () => {
+          tokens = placeTokens();
+        });
+
+        function setClawX(x) {
+          gantry.style.transform = `translateX(${x - 13}px)`;
+          cable.style.left = x - 1 + "px";
+          claw.style.left = x - 22 + "px";
+        }
+        function setClawY(y) {
+          cable.style.height = y + "px";
+          claw.style.top = y + 18 + "px";
+        }
+        setClawX(80);
+        setClawY(60);
+
+        function showToast(text) {
+          toast.textContent = text;
+          toast.classList.add("show");
+          setTimeout(() => toast.classList.remove("show"), 900);
+        }
+
+        async function dropCycle() {
+          if (tokens.length === 0) tokens = placeTokens();
+          // pick a target
+          const target = tokens[Math.floor(Math.random() * tokens.length)];
+          const targetX = target.x + 14;
+          const targetY = target.y + 6;
+
+          // travel to X
+          setClawX(targetX);
+          await wait(1300);
+
+          // descend
+          const gameH = game.clientHeight;
+          setClawY(targetY + 30);
+          await wait(700);
+
+          // close claw + grab token
+          claw.classList.add("closed");
+          target.el.classList.add("lifted");
+          await wait(280);
+
+          // ascend with token attached
+          setClawY(60);
+          moveTokenWithClaw(target, targetX, 60 + 24);
+          await wait(700);
+
+          // travel to chute (left side)
+          const chuteX = 50;
+          setClawX(chuteX);
+          moveTokenWithClaw(target, chuteX, 60 + 24);
+          await wait(1300);
+
+          // open + drop
+          claw.classList.remove("closed");
+          target.el.style.transition = "top 0.5s cubic-bezier(.55,.05,.7,.95), left 0.5s, opacity 0.5s";
+          target.el.style.top = gameH - 80 + "px";
+          target.el.style.left = chuteX - 14 + "px";
+          await wait(500);
+          target.el.style.opacity = "0";
+          await wait(200);
+
+          // remove from active tokens
+          tokens = tokens.filter(t => t !== target);
+          setTimeout(() => target.el.remove(), 300);
+
+          // score
+          state.score += 1;
+          state.swaps += 1;
+          score.textContent = state.score;
+          swaps.textContent = state.swaps;
+          showToast("+1 CLAWD");
+        }
+
+        function moveTokenWithClaw(t, x, y) {
+          t.el.style.left = x - 14 + "px";
+          t.el.style.top = y - 14 + "px";
+        }
+
+        function wait(ms) {
+          return new Promise(r => setTimeout(r, ms));
+        }
+
+        function startCountdown() {
+          let s = state.cadenceSec;
+          nextEl.textContent = s + "s";
+          clearInterval(state.countdown);
+          state.countdown = setInterval(() => {
+            s -= 1;
+            if (s <= 0) {
+              nextEl.textContent = "--";
+              clearInterval(state.countdown);
+            } else {
+              nextEl.textContent = s + "s";
+            }
+          }, 1000);
+        }
+
+        async function loop() {
+          while (state.running) {
+            startCountdown();
+            await wait(state.cadenceSec * 1000);
+            if (!state.running) break;
+            await dropCycle();
+          }
+        }
+
+        playBtn.addEventListener("click", () => {
+          if (state.running) {
+            state.running = false;
+            playBtn.textContent = "▶ PLAY";
+            clearInterval(state.countdown);
+            nextEl.textContent = "--";
+          } else {
+            state.running = true;
+            playBtn.textContent = "■ STOP";
+            loop();
+          }
+        });
+
+        resetBtn.addEventListener("click", () => {
+          state.running = false;
+          state.score = 0;
+          state.swaps = 0;
+          score.textContent = "0";
+          swaps.textContent = "0";
+          nextEl.textContent = "--";
+          clearInterval(state.countdown);
+          playBtn.textContent = "▶ PLAY";
+          tokens = placeTokens();
+          setClawX(80);
+          setClawY(60);
+          claw.classList.remove("closed");
+        });
+      })();
+    </script>
+  </body>
 </html>

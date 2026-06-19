@@ -33,3 +33,4 @@ ipfs-upload.config.json
 # nextjs static export
 packages/nextjs/out
 
+.vercel

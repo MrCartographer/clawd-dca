@@ -1,0 +1,1460 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>CLAWD Financial — a suite of on-chain strategies</title>
+    <meta
+      name="description"
+      content="DCA, limit orders, TWAP, stop-loss, range, and reverse-DCA — all in one place for $CLAWD."
+    />
+    <link rel="icon" href="/clawd-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      /* ---------- Carta Ink tokens (mirrors globals.css) ---------- */
+      :root {
+        --ink-white: #ffffff;
+        --ink-black: #1a1a1a;
+        --ink-gray-10: #f1f1f1;
+        --ink-gray-40: #dedfdf;
+        --ink-gray-60: #a7aaaa;
+        --ink-gray-80: #656b6b;
+        --ink-gray-100: #2c3030;
+        --ink-brown-10: #fbfaf9;
+        --ink-blue-10: #eaf0f8;
+        --ink-blue-30: #c0d1e9;
+        --ink-blue-70: #285da3;
+        --ink-blue-90: #1a3e6d;
+        --ink-blue-100: #122948;
+        --ink-orange-60: #ff7d55;
+        --ink-orange-10: #fff7f5;
+        --ink-green-10: #e8f5ee;
+        --ink-green-70: #1f8a4d;
+        --ink-violet-10: #f1ecfb;
+        --ink-violet-70: #6b3fa0;
+        --ink-rose-10: #fdecef;
+        --ink-rose-70: #b6315b;
+        --ink-amber-10: #fbf3df;
+        --ink-amber-70: #a56b15;
+        --ink-teal-10: #e0f2f2;
+        --ink-teal-70: #0e7a7a;
+        --ink-fuchsia-10: #fbecf5;
+        --ink-fuchsia-70: #a02f7a;
+        --ink-gold-10: #fff4d4;
+        --ink-gold-70: #8a6a0c;
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+        --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        color: var(--ink-black);
+        letter-spacing: -0.005em;
+        -webkit-font-smoothing: antialiased;
+        background:
+          radial-gradient(circle at 20% -10%, var(--ink-blue-10) 0%, transparent 45%),
+          radial-gradient(circle at 100% 0%, var(--ink-orange-10) 0%, transparent 45%), var(--ink-brown-10);
+        min-height: 100vh;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 56px 24px 80px;
+      }
+
+      /* ---------- header ---------- */
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 56px;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+        font-size: 0.95rem;
+        letter-spacing: -0.01em;
+      }
+      .brand-mark {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        overflow: hidden;
+        box-shadow: 0 0 0 1px var(--ink-orange-60);
+        background: #fff;
+      }
+      .brand-mark img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .pill-nav {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--ink-brown-10);
+        border: 1px solid var(--ink-gray-40);
+        border-radius: 999px;
+        padding: 4px;
+      }
+      .pill-nav a {
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--ink-gray-80);
+      }
+      .pill-nav a.is-active {
+        color: var(--ink-black);
+        background: var(--ink-white);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .hero {
+        text-align: center;
+        margin-bottom: 48px;
+      }
+      .eyebrow {
+        display: inline-block;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-blue-70);
+        background: var(--ink-blue-10);
+        border: 1px solid var(--ink-blue-30);
+        border-radius: 999px;
+        padding: 4px 12px;
+        margin-bottom: 14px;
+      }
+      h1 {
+        font-size: clamp(2rem, 4vw, 3rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 0 0 12px;
+        line-height: 1.1;
+      }
+      .lede {
+        font-size: 1.05rem;
+        color: var(--ink-gray-80);
+        max-width: 620px;
+        margin: 0 auto;
+      }
+
+      /* ---------- product grid ---------- */
+      .product-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+      }
+      @media (max-width: 980px) {
+        .product-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 640px) {
+        .product-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* mini swap-card — same DNA as the /create page card, scaled down */
+      .mini-card {
+        background: var(--ink-white);
+        border: 1px solid var(--ink-gray-40);
+        border-radius: 20px;
+        box-shadow:
+          0 8px 24px rgba(0, 0, 0, 0.04),
+          0 2px 6px rgba(0, 0, 0, 0.03);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transition:
+          transform 180ms ease,
+          box-shadow 180ms ease,
+          border-color 180ms ease;
+        cursor: pointer;
+      }
+      .mini-card:hover {
+        transform: translateY(-2px);
+        box-shadow:
+          0 16px 32px rgba(0, 0, 0, 0.08),
+          0 2px 8px rgba(0, 0, 0, 0.04);
+        border-color: var(--ink-gray-60);
+      }
+
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .card-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+      }
+      .card-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .card-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+
+      .badge {
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid;
+      }
+      .badge.live {
+        color: var(--ink-green-70);
+        background: var(--ink-green-10);
+        border-color: rgba(31, 138, 77, 0.3);
+      }
+      .badge.new {
+        color: var(--ink-orange-60);
+        background: var(--ink-orange-10);
+        border-color: rgba(255, 125, 85, 0.3);
+      }
+      .badge.soon {
+        color: var(--ink-gray-80);
+        background: var(--ink-gray-10);
+        border-color: var(--ink-gray-40);
+      }
+
+      .card-tagline {
+        font-size: 0.82rem;
+        color: var(--ink-gray-80);
+        line-height: 1.45;
+        min-height: 36px;
+      }
+
+      /* mini token-panel — recognizable, but ~half size */
+      .mini-token-panel {
+        background: var(--ink-brown-10);
+        border: 1px solid var(--ink-gray-40);
+        border-radius: 14px;
+        padding: 10px 12px;
+      }
+      .mini-token-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .mini-amount {
+        font-size: 1.15rem;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+        font-variant-numeric: tabular-nums;
+      }
+      .mini-amount .unit {
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: var(--ink-gray-80);
+        margin-left: 4px;
+      }
+      .mini-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: var(--ink-white);
+        border: 1px solid var(--ink-gray-40);
+        border-radius: 999px;
+        padding: 3px 10px 3px 4px;
+        font-weight: 600;
+        font-size: 0.75rem;
+        box-shadow: var(--shadow-sm);
+        white-space: nowrap;
+      }
+      .mini-chip .dot {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+      }
+      .mini-chip .dot.usdc {
+        background: var(--ink-blue-10);
+        color: var(--ink-blue-70);
+        box-shadow: 0 0 0 1px var(--ink-blue-30);
+      }
+      .mini-chip .dot.clawd {
+        background: #fff;
+        overflow: hidden;
+        padding: 0;
+        box-shadow: 0 0 0 1px var(--ink-orange-60);
+      }
+      .mini-chip .dot.clawd img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 999px;
+      }
+
+      .mini-divider {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: -6px 0;
+        position: relative;
+        z-index: 2;
+      }
+      .mini-divider .arrow {
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        background: var(--ink-white);
+        border: 1px solid var(--ink-gray-40);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--ink-blue-70);
+        box-shadow: var(--shadow-sm);
+      }
+      .mini-divider .arrow.bidirectional {
+        color: var(--ink-violet-70);
+      }
+      .mini-divider svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* meta row — “Cadence: Daily • $50/swap” style */
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        font-size: 0.72rem;
+      }
+      .meta-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: var(--ink-brown-10);
+        border: 1px solid var(--ink-gray-40);
+        color: var(--ink-gray-80);
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+      }
+      .meta-pill strong {
+        color: var(--ink-black);
+        font-weight: 600;
+      }
+
+      .card-cta {
+        margin-top: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: var(--ink-blue-70);
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.85rem;
+        border: 1px solid var(--ink-blue-70);
+        box-shadow: var(--shadow-sm);
+        transition:
+          background-color 150ms ease,
+          transform 150ms ease;
+      }
+      .card-cta:hover {
+        background: var(--ink-blue-90);
+        border-color: var(--ink-blue-90);
+      }
+      .card-cta.secondary {
+        background: transparent;
+        color: var(--ink-blue-70);
+        border-color: var(--ink-gray-40);
+        box-shadow: none;
+      }
+      .card-cta.secondary:hover {
+        background: var(--ink-blue-10);
+      }
+      .card-cta.disabled {
+        background: var(--ink-gray-10);
+        color: var(--ink-gray-80);
+        border-color: var(--ink-gray-40);
+        box-shadow: none;
+        cursor: not-allowed;
+      }
+
+      /* per-product accent strip on top */
+      .accent-strip {
+        height: 3px;
+        border-radius: 999px;
+        margin: -16px -16px 4px;
+      }
+      .accent-strip.dca {
+        background: linear-gradient(90deg, var(--ink-blue-70), var(--ink-blue-30));
+      }
+      .accent-strip.limit {
+        background: linear-gradient(90deg, var(--ink-orange-60), #ffd1c1);
+      }
+      .accent-strip.twap {
+        background: linear-gradient(90deg, var(--ink-violet-70), #d6c5f2);
+      }
+      .accent-strip.stop {
+        background: linear-gradient(90deg, var(--ink-rose-70), #f3c0cf);
+      }
+      .accent-strip.range {
+        background: linear-gradient(90deg, var(--ink-green-70), #b9e1c9);
+      }
+      .accent-strip.exit {
+        background: linear-gradient(90deg, var(--ink-amber-70), #f1d99a);
+      }
+      .accent-strip.vest {
+        background: linear-gradient(90deg, var(--ink-teal-70), #b6e0e0);
+      }
+      .accent-strip.lp {
+        background: linear-gradient(90deg, var(--ink-fuchsia-70), #f0c5e0);
+      }
+      .accent-strip.bracket {
+        background: linear-gradient(90deg, var(--ink-gold-70), #f7e3a3);
+      }
+
+      /* icon backgrounds */
+      .icon-dca {
+        background: var(--ink-blue-10);
+        color: var(--ink-blue-70);
+      }
+      .icon-limit {
+        background: var(--ink-orange-10);
+        color: var(--ink-orange-60);
+      }
+      .icon-twap {
+        background: var(--ink-violet-10);
+        color: var(--ink-violet-70);
+      }
+      .icon-stop {
+        background: var(--ink-rose-10);
+        color: var(--ink-rose-70);
+      }
+      .icon-range {
+        background: var(--ink-green-10);
+        color: var(--ink-green-70);
+      }
+      .icon-exit {
+        background: var(--ink-amber-10);
+        color: var(--ink-amber-70);
+      }
+      .icon-vest {
+        background: var(--ink-teal-10);
+        color: var(--ink-teal-70);
+      }
+      .icon-lp {
+        background: var(--ink-fuchsia-10);
+        color: var(--ink-fuchsia-70);
+      }
+      .icon-bracket {
+        background: var(--ink-gold-10);
+        color: var(--ink-gold-70);
+      }
+
+      /* ---------- section divider + alternative slider concept ---------- */
+      .alt-section {
+        margin-top: 80px;
+        padding-top: 40px;
+        border-top: 1px dashed var(--ink-gray-40);
+      }
+      .alt-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .alt-head h2 {
+        margin: 0;
+        font-size: 1.3rem;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+      }
+      .alt-head .note {
+        font-size: 0.85rem;
+        color: var(--ink-gray-80);
+        max-width: 520px;
+      }
+
+      /* slider variant — horizontal scroller with snap */
+      .slider {
+        display: flex;
+        gap: 16px;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        padding: 8px 4px 24px;
+        margin: 0 -4px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--ink-gray-40) transparent;
+      }
+      .slider::-webkit-scrollbar {
+        height: 8px;
+      }
+      .slider::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .slider::-webkit-scrollbar-thumb {
+        background: var(--ink-gray-40);
+        border-radius: 999px;
+      }
+      .slider .mini-card {
+        flex: 0 0 320px;
+        scroll-snap-align: start;
+        cursor: pointer;
+      }
+
+      /* author note block */
+      .designer-note {
+        margin-top: 56px;
+        padding: 20px 22px;
+        background: var(--ink-blue-10);
+        border: 1px solid var(--ink-blue-30);
+        border-radius: 16px;
+        font-size: 0.88rem;
+        color: var(--ink-blue-100);
+        line-height: 1.55;
+      }
+      .designer-note h3 {
+        margin: 0 0 8px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-blue-70);
+      }
+      .designer-note ul {
+        margin: 8px 0 0;
+        padding-left: 18px;
+      }
+      .designer-note li {
+        margin: 4px 0;
+      }
+
+      footer {
+        margin-top: 56px;
+        text-align: center;
+        font-size: 0.78rem;
+        color: var(--ink-gray-60);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <!-- Header -->
+      <div class="top">
+        <a class="brand" href="/">
+          <span class="brand-mark"><img src="/clawd-original.jpg" alt="CLAWD" /></span>
+          <span>CLAWD</span>
+        </a>
+        <nav class="pill-nav">
+          <a href="/">Dashboard</a>
+          <a href="/create">Create</a>
+          <a href="/clawd-financial.html" class="is-active">Suite</a>
+          <a href="/stats">Stats</a>
+        </nav>
+      </div>
+
+      <!-- Hero -->
+      <header class="hero">
+        <span class="eyebrow">CLAWD Financial · Strategy Suite</span>
+        <h1>Nine ways to handle $CLAWD.</h1>
+        <p class="lede">
+          Pick the strategy that matches your conviction — from passive accumulation to surgical exits. Every product
+          runs on-chain on Base.
+        </p>
+      </header>
+
+      <!-- ============== PRIMARY: 2x3 GRID (recommended) ============== -->
+      <section class="product-grid">
+        <!-- 1. DCA -->
+        <a class="mini-card" href="/create" aria-label="Configure DCA">
+          <div class="accent-strip dca"></div>
+          <div class="card-head">
+            <div class="card-title-row">
+              <span class="card-icon icon-dca">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7" />
+                  <path d="M3 4v5h5" />
+                </svg>
+              </span>
+              <span class="card-title">DCA</span>
+            </div>
+            <span class="badge live">Live</span>
+          </div>
+          <p class="card-tagline">Stack CLAWD on a schedule. Set it once, keepers do the rest.</p>
+
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">500<span class="unit">USDC</span></div>
+              <div class="mini-chip"><span class="dot usdc">$</span><span>USDC</span></div>
+            </div>
+          </div>
+          <div class="mini-divider">
+            <span class="arrow"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 5v14M19 12l-7 7-7-7" /></svg
+            ></span>
+          </div>
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">$50<span class="unit">/ swap</span></div>
+              <div class="mini-chip">
+                <span class="dot clawd"><img src="/clawd-original.jpg" alt="" /></span><span>CLAWD</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="meta-row">
+            <span class="meta-pill"><strong>Daily</strong></span>
+            <span class="meta-pill">10 swaps</span>
+            <span class="meta-pill">~10 days</span>
+          </div>
+          <span class="card-cta">Configure DCA</span>
+        </a>
+
+        <!-- 2. Limit Order -->
+        <a class="mini-card" href="#" aria-label="Configure Limit Order">
+          <div class="accent-strip limit"></div>
+          <div class="card-head">
+            <div class="card-title-row">
+              <span class="card-icon icon-limit">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12h6l3-7 4 14 3-7h2" />
+                </svg>
+              </span>
+              <span class="card-title">Limit Order</span>
+            </div>
+            <span class="badge new">New</span>
+          </div>
+          <p class="card-tagline">Buy CLAWD only when price hits your target. Patient money.</p>
+
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">1,000<span class="unit">USDC</span></div>
+              <div class="mini-chip"><span class="dot usdc">$</span><span>USDC</span></div>
+            </div>
+          </div>
+          <div class="mini-divider">
+            <span class="arrow"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 5v14M19 12l-7 7-7-7" /></svg
+            ></span>
+          </div>
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">@ $0.045<span class="unit">/ CLAWD</span></div>
+              <div class="mini-chip">
+                <span class="dot clawd"><img src="/clawd-original.jpg" alt="" /></span><span>CLAWD</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="meta-row">
+            <span class="meta-pill">Trigger <strong>≤ $0.045</strong></span>
+            <span class="meta-pill">GTC</span>
+          </div>
+          <span class="card-cta">Configure Limit</span>
+        </a>
+
+        <!-- 3. TWAP -->
+        <a class="mini-card" href="#" aria-label="Configure TWAP">
+          <div class="accent-strip twap"></div>
+          <div class="card-head">
+            <div class="card-title-row">
+              <span class="card-icon icon-twap">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+              </span>
+              <span class="card-title">TWAP</span>
+            </div>
+            <span class="badge soon">Soon</span>
+          </div>
+          <p class="card-tagline">Slice one large buy across minutes or hours. Minimize price impact.</p>
+
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">10,000<span class="unit">USDC</span></div>
+              <div class="mini-chip"><span class="dot usdc">$</span><span>USDC</span></div>
+            </div>
+          </div>
+          <div class="mini-divider">
+            <span class="arrow"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 5v14M19 12l-7 7-7-7" /></svg
+            ></span>
+          </div>
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">over 4h<span class="unit">window</span></div>
+              <div class="mini-chip">
+                <span class="dot clawd"><img src="/clawd-original.jpg" alt="" /></span><span>CLAWD</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="meta-row">
+            <span class="meta-pill"><strong>16</strong> slices</span>
+            <span class="meta-pill">15-min cadence</span>
+            <span class="meta-pill">0.5% slip</span>
+          </div>
+          <span class="card-cta secondary">Notify me</span>
+        </a>
+
+        <!-- 4. Stop-Loss / Take-Profit -->
+        <a class="mini-card" href="#" aria-label="Configure Stop / Take">
+          <div class="accent-strip stop"></div>
+          <div class="card-head">
+            <div class="card-title-row">
+              <span class="card-icon icon-stop">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 2v6" />
+                  <path d="M12 16v6" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M4 12h4" />
+                  <path d="M16 12h4" />
+                </svg>
+              </span>
+              <span class="card-title">Stop / Take</span>
+            </div>
+            <span class="badge soon">Soon</span>
+          </div>
+          <p class="card-tagline">Auto-exit if CLAWD breaks above or below your trigger. Sleep through the chart.</p>
+
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">50,000<span class="unit">CLAWD</span></div>
+              <div class="mini-chip">
+                <span class="dot clawd"><img src="/clawd-original.jpg" alt="" /></span><span>CLAWD</span>
+              </div>
+            </div>
+          </div>
+          <div class="mini-divider">
+            <span class="arrow"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 5v14M19 12l-7 7-7-7" /></svg
+            ></span>
+          </div>
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">USDC<span class="unit">on trigger</span></div>
+              <div class="mini-chip"><span class="dot usdc">$</span><span>USDC</span></div>
+            </div>
+          </div>
+
+          <div class="meta-row">
+            <span class="meta-pill" style="color: var(--ink-rose-70)">Stop <strong>≤ $0.030</strong></span>
+            <span class="meta-pill" style="color: var(--ink-green-70)">Take <strong>≥ $0.080</strong></span>
+          </div>
+          <span class="card-cta secondary">Notify me</span>
+        </a>
+
+        <!-- 5. Range / Grid Order -->
+        <a class="mini-card" href="#" aria-label="Configure Range">
+          <div class="accent-strip range"></div>
+          <div class="card-head">
+            <div class="card-title-row">
+              <span class="card-icon icon-range">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 18l6-6 4 4 8-9" />
+                  <path d="M14 7h7v7" />
+                </svg>
+              </span>
+              <span class="card-title">Range</span>
+            </div>
+            <span class="badge soon">Soon</span>
+          </div>
+          <p class="card-tagline">Buy low, sell high inside a band. Earn from CLAWD's chop, not just direction.</p>
+
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">2,500<span class="unit">USDC</span></div>
+              <div class="mini-chip"><span class="dot usdc">$</span><span>USDC</span></div>
+            </div>
+          </div>
+          <div class="mini-divider">
+            <span class="arrow bidirectional" title="Two-way"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M7 7l-3 3 3 3" />
+                <path d="M17 17l3-3-3-3" />
+                <path d="M4 10h16" />
+                <path d="M4 14h16" /></svg
+            ></span>
+          </div>
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">$0.04 – $0.07<span class="unit">band</span></div>
+              <div class="mini-chip">
+                <span class="dot clawd"><img src="/clawd-original.jpg" alt="" /></span><span>CLAWD</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="meta-row">
+            <span class="meta-pill"><strong>8</strong> grid lines</span>
+            <span class="meta-pill">Re-buys auto</span>
+          </div>
+          <span class="card-cta secondary">Notify me</span>
+        </a>
+
+        <!-- 6. Auto-Sell (Reverse DCA) -->
+        <a class="mini-card" href="#" aria-label="Configure Auto-Sell">
+          <div class="accent-strip exit"></div>
+          <div class="card-head">
+            <div class="card-title-row">
+              <span class="card-icon icon-exit">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-3-6.7" />
+                  <path d="M21 4v5h-5" />
+                </svg>
+              </span>
+              <span class="card-title">Auto-Sell</span>
+            </div>
+            <span class="badge soon">Soon</span>
+          </div>
+          <p class="card-tagline">Reverse-DCA: drip CLAWD back into USDC over time. Take profit without timing.</p>
+
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">25,000<span class="unit">CLAWD</span></div>
+              <div class="mini-chip">
+                <span class="dot clawd"><img src="/clawd-original.jpg" alt="" /></span><span>CLAWD</span>
+              </div>
+            </div>
+          </div>
+          <div class="mini-divider">
+            <span class="arrow"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 5v14M19 12l-7 7-7-7" /></svg
+            ></span>
+          </div>
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">$25<span class="unit">/ swap</span></div>
+              <div class="mini-chip"><span class="dot usdc">$</span><span>USDC</span></div>
+            </div>
+          </div>
+
+          <div class="meta-row">
+            <span class="meta-pill"><strong>Weekly</strong></span>
+            <span class="meta-pill">~6 months</span>
+          </div>
+          <span class="card-cta secondary">Notify me</span>
+        </a>
+
+        <!-- 7. Vesting Lock -->
+        <a class="mini-card" href="#" aria-label="Configure Vesting Lock">
+          <div class="accent-strip vest"></div>
+          <div class="card-head">
+            <div class="card-title-row">
+              <span class="card-icon icon-vest">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="4" y="11" width="16" height="10" rx="2" />
+                  <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                </svg>
+              </span>
+              <span class="card-title">Vesting Lock</span>
+            </div>
+            <span class="badge soon">Soon</span>
+          </div>
+          <p class="card-tagline">Lock CLAWD with linear unlock. A diamond-hand commitment, on-chain.</p>
+
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">100,000<span class="unit">CLAWD</span></div>
+              <div class="mini-chip">
+                <span class="dot clawd"><img src="/clawd-original.jpg" alt="" /></span><span>CLAWD</span>
+              </div>
+            </div>
+          </div>
+          <div class="mini-divider">
+            <span class="arrow"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="5" y="11" width="14" height="9" rx="2" />
+                <path d="M9 11V7a3 3 0 0 1 6 0v4" /></svg
+            ></span>
+          </div>
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">12 mo<span class="unit">linear</span></div>
+              <div class="mini-chip">
+                <span class="dot clawd"><img src="/clawd-original.jpg" alt="" /></span><span>CLAWD</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="meta-row">
+            <span class="meta-pill"><strong>3-mo</strong> cliff</span>
+            <span class="meta-pill">Daily drip</span>
+          </div>
+          <span class="card-cta secondary">Notify me</span>
+        </a>
+
+        <!-- 8. LP Position -->
+        <a class="mini-card" href="#" aria-label="Configure LP Position">
+          <div class="accent-strip lp"></div>
+          <div class="card-head">
+            <div class="card-title-row">
+              <span class="card-icon icon-lp">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="9" cy="12" r="6" />
+                  <circle cx="15" cy="12" r="6" />
+                </svg>
+              </span>
+              <span class="card-title">LP Position</span>
+            </div>
+            <span class="badge soon">Soon</span>
+          </div>
+          <p class="card-tagline">Provide CLAWD/USDC liquidity in a chosen range. Earn swap fees while you sleep.</p>
+
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">5,000<span class="unit">USDC + CLAWD</span></div>
+              <div class="mini-chip">
+                <span class="dot usdc">$</span><span>+</span
+                ><span class="dot clawd"><img src="/clawd-original.jpg" alt="" /></span>
+              </div>
+            </div>
+          </div>
+          <div class="mini-divider">
+            <span class="arrow bidirectional"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 2v4" />
+                <path d="M12 18v4" />
+                <path d="M4.9 4.9l2.8 2.8" />
+                <path d="M16.3 16.3l2.8 2.8" />
+                <path d="M2 12h4" />
+                <path d="M18 12h4" /></svg
+            ></span>
+          </div>
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">~18%<span class="unit">est. APR</span></div>
+              <div class="mini-chip">
+                <span
+                  class="dot"
+                  style="
+                    background: var(--ink-fuchsia-10);
+                    color: var(--ink-fuchsia-70);
+                    box-shadow: 0 0 0 1px rgba(160, 47, 122, 0.3);
+                  "
+                  >%</span
+                ><span>Fees</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="meta-row">
+            <span class="meta-pill">Range <strong>±15%</strong></span>
+            <span class="meta-pill">0.30% tier</span>
+          </div>
+          <span class="card-cta secondary">Notify me</span>
+        </a>
+
+        <!-- 9. Bracket Order -->
+        <a class="mini-card" href="#" aria-label="Configure Bracket Order">
+          <div class="accent-strip bracket"></div>
+          <div class="card-head">
+            <div class="card-title-row">
+              <span class="card-icon icon-bracket">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M7 4H4v16h3" />
+                  <path d="M17 4h3v16h-3" />
+                  <path d="M9 12h6" />
+                </svg>
+              </span>
+              <span class="card-title">Bracket Order</span>
+            </div>
+            <span class="badge soon">Soon</span>
+          </div>
+          <p class="card-tagline">Entry + take-profit + stop-loss bundled. One-click round-trip swing trade.</p>
+
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">2,000<span class="unit">USDC</span></div>
+              <div class="mini-chip"><span class="dot usdc">$</span><span>USDC</span></div>
+            </div>
+          </div>
+          <div class="mini-divider">
+            <span class="arrow bidirectional"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M5 9l4-4 4 4" />
+                <path d="M9 5v8" />
+                <path d="M19 15l-4 4-4-4" />
+                <path d="M15 19v-8" /></svg
+            ></span>
+          </div>
+          <div class="mini-token-panel">
+            <div class="mini-token-row">
+              <div class="mini-amount">@ $0.045<span class="unit">entry</span></div>
+              <div class="mini-chip">
+                <span class="dot clawd"><img src="/clawd-original.jpg" alt="" /></span><span>CLAWD</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="meta-row">
+            <span class="meta-pill" style="color: var(--ink-green-70)">TP <strong>$0.075</strong></span>
+            <span class="meta-pill" style="color: var(--ink-rose-70)">SL <strong>$0.035</strong></span>
+            <span class="meta-pill">2:1 R/R</span>
+          </div>
+          <span class="card-cta secondary">Notify me</span>
+        </a>
+      </section>
+
+      <!-- Designer note -->
+      <aside class="designer-note">
+        <h3>Why a 2×3 grid (and not a slider)</h3>
+        <ul>
+          <li>
+            <strong>Comparison wins on a suite page</strong> — users scan all six products at once instead of
+            one-at-a-time. Crucial when half are "Soon" — they signal direction even if they aren't clickable yet.
+          </li>
+          <li>
+            <strong>Sliders hide content</strong> — only ~33% of users ever interact with carousel arrows. You'd be
+            burying 5 of 6 strategies.
+          </li>
+          <li>
+            <strong>Mobile still works</strong> — the grid collapses to 2-up at tablet, 1-up at phone. A slider is no
+            better on small screens — it just becomes a horizontal scroll.
+          </li>
+          <li>
+            <strong>When a slider would win</strong>: if each card grew to ~480px wide with full configuration UI
+            inline. That's a different page (one product per screen with tabs), not a suite page.
+          </li>
+        </ul>
+      </aside>
+
+      <!-- ============== ALT: SLIDER VARIANT (for comparison) ============== -->
+      <section class="alt-section">
+        <div class="alt-head">
+          <h2>Alternative: horizontal slider</h2>
+          <p class="note">
+            Same six products, scrollable. Try it side-by-side. Notice how only ~2.5 cards are visible at a time — you
+            lose the bird's-eye-view advantage.
+          </p>
+        </div>
+
+        <div class="slider">
+          <!-- Reuse the same cards in a scroller — abbreviated copies -->
+          <div class="mini-card">
+            <div class="accent-strip dca"></div>
+            <div class="card-head">
+              <div class="card-title-row">
+                <span class="card-icon icon-dca"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 12a9 9 0 1 0 3-6.7" />
+                    <path d="M3 4v5h5" /></svg></span
+                ><span class="card-title">DCA</span>
+              </div>
+              <span class="badge live">Live</span>
+            </div>
+            <p class="card-tagline">Stack CLAWD on a schedule.</p>
+            <div class="meta-row">
+              <span class="meta-pill"><strong>Daily</strong></span
+              ><span class="meta-pill">$50/swap</span>
+            </div>
+            <span class="card-cta">Configure</span>
+          </div>
+
+          <div class="mini-card">
+            <div class="accent-strip limit"></div>
+            <div class="card-head">
+              <div class="card-title-row">
+                <span class="card-icon icon-limit"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 12h6l3-7 4 14 3-7h2" /></svg></span
+                ><span class="card-title">Limit Order</span>
+              </div>
+              <span class="badge new">New</span>
+            </div>
+            <p class="card-tagline">Buy at your target price.</p>
+            <div class="meta-row">
+              <span class="meta-pill">≤ <strong>$0.045</strong></span>
+            </div>
+            <span class="card-cta">Configure</span>
+          </div>
+
+          <div class="mini-card">
+            <div class="accent-strip twap"></div>
+            <div class="card-head">
+              <div class="card-title-row">
+                <span class="card-icon icon-twap"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" /></svg></span
+                ><span class="card-title">TWAP</span>
+              </div>
+              <span class="badge soon">Soon</span>
+            </div>
+            <p class="card-tagline">Slice a large buy over time.</p>
+            <div class="meta-row">
+              <span class="meta-pill"><strong>16</strong> slices</span>
+            </div>
+            <span class="card-cta secondary">Notify me</span>
+          </div>
+
+          <div class="mini-card">
+            <div class="accent-strip stop"></div>
+            <div class="card-head">
+              <div class="card-title-row">
+                <span class="card-icon icon-stop"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 2v6M12 16v6M4 12h4M16 12h4" /></svg></span
+                ><span class="card-title">Stop / Take</span>
+              </div>
+              <span class="badge soon">Soon</span>
+            </div>
+            <p class="card-tagline">Auto-exit on price triggers.</p>
+            <div class="meta-row">
+              <span class="meta-pill" style="color: var(--ink-rose-70)">≤ $0.030</span
+              ><span class="meta-pill" style="color: var(--ink-green-70)">≥ $0.080</span>
+            </div>
+            <span class="card-cta secondary">Notify me</span>
+          </div>
+
+          <div class="mini-card">
+            <div class="accent-strip range"></div>
+            <div class="card-head">
+              <div class="card-title-row">
+                <span class="card-icon icon-range"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 18l6-6 4 4 8-9" />
+                    <path d="M14 7h7v7" /></svg></span
+                ><span class="card-title">Range</span>
+              </div>
+              <span class="badge soon">Soon</span>
+            </div>
+            <p class="card-tagline">Buy low, sell high in a band.</p>
+            <div class="meta-row"><span class="meta-pill">$0.04–$0.07</span></div>
+            <span class="card-cta secondary">Notify me</span>
+          </div>
+
+          <div class="mini-card">
+            <div class="accent-strip exit"></div>
+            <div class="card-head">
+              <div class="card-title-row">
+                <span class="card-icon icon-exit"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 12a9 9 0 1 1-3-6.7" />
+                    <path d="M21 4v5h-5" /></svg></span
+                ><span class="card-title">Auto-Sell</span>
+              </div>
+              <span class="badge soon">Soon</span>
+            </div>
+            <p class="card-tagline">Reverse DCA out to USDC.</p>
+            <div class="meta-row">
+              <span class="meta-pill"><strong>Weekly</strong></span>
+            </div>
+            <span class="card-cta secondary">Notify me</span>
+          </div>
+
+          <div class="mini-card">
+            <div class="accent-strip vest"></div>
+            <div class="card-head">
+              <div class="card-title-row">
+                <span class="card-icon icon-vest"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="4" y="11" width="16" height="10" rx="2" />
+                    <path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg></span
+                ><span class="card-title">Vesting Lock</span>
+              </div>
+              <span class="badge soon">Soon</span>
+            </div>
+            <p class="card-tagline">Lock CLAWD with linear unlock.</p>
+            <div class="meta-row">
+              <span class="meta-pill"><strong>12 mo</strong></span
+              ><span class="meta-pill">3-mo cliff</span>
+            </div>
+            <span class="card-cta secondary">Notify me</span>
+          </div>
+
+          <div class="mini-card">
+            <div class="accent-strip lp"></div>
+            <div class="card-head">
+              <div class="card-title-row">
+                <span class="card-icon icon-lp"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="9" cy="12" r="6" />
+                    <circle cx="15" cy="12" r="6" /></svg></span
+                ><span class="card-title">LP Position</span>
+              </div>
+              <span class="badge soon">Soon</span>
+            </div>
+            <p class="card-tagline">Earn fees on CLAWD/USDC.</p>
+            <div class="meta-row">
+              <span class="meta-pill">~<strong>18%</strong> APR</span>
+            </div>
+            <span class="card-cta secondary">Notify me</span>
+          </div>
+
+          <div class="mini-card">
+            <div class="accent-strip bracket"></div>
+            <div class="card-head">
+              <div class="card-title-row">
+                <span class="card-icon icon-bracket"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M7 4H4v16h3" />
+                    <path d="M17 4h3v16h-3" /></svg></span
+                ><span class="card-title">Bracket</span>
+              </div>
+              <span class="badge soon">Soon</span>
+            </div>
+            <p class="card-tagline">Entry + TP + SL in one.</p>
+            <div class="meta-row">
+              <span class="meta-pill" style="color: var(--ink-green-70)">TP $0.075</span
+              ><span class="meta-pill" style="color: var(--ink-rose-70)">SL $0.035</span>
+            </div>
+            <span class="card-cta secondary">Notify me</span>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        Concept · CLAWD Financial Suite ·
+        <a class="link" href="/" style="color: var(--ink-blue-70)">back to dashboard</a>
+      </footer>
+    </div>
+  </body>
+</html>

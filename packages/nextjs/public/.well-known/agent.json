@@ -1,0 +1,124 @@
+{
+  "schema_version": "0.1",
+  "name": "CLAWD DCA",
+  "name_for_human": "CLAWD DCA Engine",
+  "description": "Permissionless onchain dollar-cost-averaging on Base. Deposit USDC, pick any ERC-20 target with USDC/WETH liquidity, set a cadence, and let community keepers execute the swaps. Every swap routes a 10 bps burn fee through USDC→CLAWD→0xdead, making CLAWD deflationary across the whole engine.",
+  "version": "3.0",
+  "homepage": "https://clawd-dca.vercel.app",
+  "docs": "https://clawd-dca.vercel.app/why-dca",
+  "license": "MIT",
+  "contact": {
+    "github": "https://github.com/clawdbotatg/leftclaw-service-job-99"
+  },
+  "contract": {
+    "name": "CLAWDdcaV3",
+    "chain": "base",
+    "chain_id": 8453,
+    "address": "0xDB5Da5B9C55D5FC72EB19692aB41Aabbc46278AC",
+    "deployed_block": 46483901,
+    "abi_url": "https://clawd-dca.vercel.app/.well-known/clawd-dca-v3.abi.json",
+    "metadata_url": "https://clawd-dca.vercel.app/.well-known/clawd-dca-v3.metadata.json",
+    "explorer": "https://basescan.org/address/0xDB5Da5B9C55D5FC72EB19692aB41Aabbc46278AC",
+    "verified": true,
+    "audit": "https://leftclaw.services"
+  },
+  "tokens": {
+    "input": {
+      "symbol": "USDC",
+      "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "decimals": 6
+    },
+    "burn_destination": {
+      "symbol": "CLAWD",
+      "address": "0x9f86dB9fc6f7c9408e8Fda3Ff8ce4e78ac7a6b07",
+      "decimals": 18
+    },
+    "router": {
+      "symbol": "WETH",
+      "address": "0x4200000000000000000000000000000000000006",
+      "decimals": 18
+    }
+  },
+  "router": {
+    "name": "Uniswap V3 SwapRouter02 on Base",
+    "address": "0x2626664c2603336E57B271c5C0b26F421741e481",
+    "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+  },
+  "fees": {
+    "keeper_bps": 10,
+    "protocol_bps": 10,
+    "burn_bps": 10,
+    "total_bps": 30,
+    "note": "Deducted from amountPerSwap before each swap. Burn fee always converts USDC→CLAWD and sends to 0xdead, regardless of target token."
+  },
+  "constants": {
+    "epoch_duration_seconds": 10800,
+    "min_amount_per_swap_usdc": "1000000",
+    "default_slippage_bps": 300,
+    "max_slippage_bps": 1000
+  },
+  "predecessors": [
+    {
+      "version": "2.0",
+      "address": "0xa16095e72936aD6DAb012ec1b95222F6FCB5f5C2",
+      "status": "retired",
+      "deployed_block": 46170369,
+      "retired": "2026-05-28",
+      "explorer": "https://basescan.org/address/0xa16095e72936aD6DAb012ec1b95222F6FCB5f5C2"
+    },
+    {
+      "version": "1.0",
+      "address": "0x8c81CAeCA48f521Df24B65F1C22c11150830F088",
+      "status": "retired",
+      "deployed_block": 45660684,
+      "retired": "2026-05-19",
+      "explorer": "https://basescan.org/address/0x8c81CAeCA48f521Df24B65F1C22c11150830F088"
+    }
+  ],
+  "capabilities": {
+    "reads": [
+      "positions(uint256)",
+      "getPositionsByOwner(address)",
+      "isRipe(uint256)",
+      "getRipePositions(uint256[])",
+      "currentEpoch()",
+      "burnFeeBalance()",
+      "protocolFeeBalance()",
+      "nextPositionId()"
+    ],
+    "writes": [
+      "createPositionViaWETH(totalUSDC, amountPerSwap, intervalInEpochs, targetToken, usdcWethFee, wethTargetFee, slippageBps)",
+      "createPosition(totalUSDC, amountPerSwap, intervalInEpochs, targetToken, swapPath, slippageBps)",
+      "executeDCA(positionId)",
+      "executeDCAWithMin(positionId, amountOutMinimum)",
+      "executeBatch(positionIds)",
+      "executeBurn()",
+      "withdrawToken(positionId)",
+      "closePosition(positionId)"
+    ],
+    "events": [
+      "PositionCreated(positionId, owner, targetToken, totalUSDC, amountPerSwap, intervalInEpochs, slippageBps)",
+      "PositionExecuted(positionId, keeper, amountSwapped, tokenReceived, keeperFee, epoch)",
+      "PositionClosed(positionId, closedBy, usdcRefunded, tokenRefunded)",
+      "TokenWithdrawn(positionId, owner, amount)",
+      "BurnExecuted(executor, usdcIn, clawdBurned)",
+      "ProtocolFeesWithdrawn(to, amount)"
+    ]
+  },
+  "intents": {
+    "stack_token_long_term": {
+      "description": "Open a position to DCA into a Base token on a schedule.",
+      "primary_call": "createPositionViaWETH",
+      "inputs": ["targetToken", "totalUSDC", "amountPerSwap", "intervalInEpochs"]
+    },
+    "earn_keeper_fees": {
+      "description": "Run as a keeper — execute ripe positions and earn 10 bps per execution.",
+      "primary_call": "executeDCAWithMin",
+      "discover_via": ["getRipePositions", "isRipe"]
+    },
+    "burn_for_deflation": {
+      "description": "Trigger the permissionless USDC→CLAWD burn when burnFeeBalance is meaningful.",
+      "primary_call": "executeBurn"
+    }
+  }
+}

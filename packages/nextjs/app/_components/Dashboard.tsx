@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Address as AddressComp } from "@scaffold-ui/components";
 import type { NextPage } from "next";
 import { base } from "viem/chains";
 import { useAccount, useReadContract, useSwitchChain } from "wagmi";
@@ -53,38 +52,40 @@ const Home: NextPage = () => {
   const ids = (positionIds as readonly bigint[] | undefined) ?? [];
 
   return (
-    <div className="max-w-5xl w-full mx-auto px-4 py-10 sm:py-14 flex flex-col gap-8">
-      <header className="flex flex-col items-center gap-4 text-center">
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight my-0">
-          Stack <span className="text-[color:var(--ink-orange-60)]">CLAWD</span> on autopilot
-        </h1>
-        <p className="opacity-70 max-w-xl mx-auto my-0 text-base sm:text-lg leading-relaxed">
-          USDC in. CLAWD out. Permissionless keepers run your DCA on Base — every 3h, daily, weekly, or your call.
+    <div className="max-w-6xl w-full mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-16 flex flex-col gap-12 mount">
+      {/* hero */}
+      <header className="flex flex-col items-center text-center">
+        <p className="text-[color:var(--text-1)] max-w-xl text-base sm:text-lg leading-relaxed">
+          Deposit USDC, choose any Base token, set a cadence. Keepers run the DCA. Every swap quietly burns CLAWD
+          forever.
         </p>
       </header>
 
+      {/* swap-style hero card */}
       <div className="swap-card max-w-md w-full mx-auto flex flex-col gap-3">
         <div className="flex items-center justify-between px-1">
-          <span className="text-sm font-semibold">Stack CLAWD</span>
+          <span className="text-sm font-semibold tracking-tight">DCA into any Base token</span>
           {isConnected && address ? (
-            <span className="text-xs opacity-70 flex items-center gap-1.5">
-              <span className="opacity-60 uppercase tracking-wide">Connected</span>
-              <AddressComp address={address} format="short" size="xs" chain={base} />
+            <span className="text-xs text-[color:var(--text-2)] flex items-center gap-1.5">
+              <span className="dot dot-pulse text-[color:var(--good)]" />
+              Live
             </span>
           ) : (
-            <span className="text-xs opacity-60">Connect your wallet to view balances</span>
+            <span className="text-xs text-[color:var(--text-3)]">Connect wallet to deposit</span>
           )}
         </div>
 
         <div className="token-panel">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs opacity-60 uppercase tracking-wide">You deposit</span>
-            <span className="text-xs opacity-60 tabular">Wallet: ${formatUsdc(usdcBalance as bigint | undefined)}</span>
+            <span className="text-[11px] text-[color:var(--text-2)] uppercase tracking-[0.12em]">You deposit</span>
+            <span className="text-[11px] text-[color:var(--text-2)] tabular">
+              {isConnected ? `Wallet $${formatUsdc(usdcBalance as bigint | undefined)}` : "—"}
+            </span>
           </div>
           <div className="flex items-center justify-between gap-3">
-            <div className="text-3xl font-semibold opacity-50 tabular">0.00</div>
+            <div className="text-[32px] font-semibold text-[color:var(--text-3)] tabular">0.00</div>
             <div className="token-chip">
-              <span className="inline-flex w-6 h-6 rounded-full bg-[color:var(--ink-blue-10)] text-[color:var(--ink-blue-70)] text-[10px] font-bold items-center justify-center ring-1 ring-[color:var(--ink-blue-30)]">
+              <span className="inline-flex w-6 h-6 rounded-full bg-[#2563eb] text-white text-[10px] font-bold items-center justify-center">
                 $
               </span>
               <span>USDC</span>
@@ -92,15 +93,15 @@ const Home: NextPage = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-center -my-4 z-10">
-          <div className="w-10 h-10 rounded-full bg-base-100 border border-[color:var(--ink-gray-40)] flex items-center justify-center shadow-sm text-[color:var(--ink-blue-70)]">
+        <div className="flex items-center justify-center -my-3.5 z-10">
+          <div className="w-9 h-9 rounded-full bg-[color:var(--surface-0)] border border-[color:var(--line)] flex items-center justify-center shadow-md">
             <svg
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
-              width="18"
-              height="18"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.5"
+              strokeWidth="2.2"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
@@ -111,18 +112,18 @@ const Home: NextPage = () => {
 
         <div className="token-panel">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs opacity-60 uppercase tracking-wide">You receive</span>
-            <span className="text-xs opacity-60 tabular">
-              Wallet: {formatClawd(clawdBalance as bigint | undefined)}
+            <span className="text-[11px] text-[color:var(--text-2)] uppercase tracking-[0.12em]">You receive</span>
+            <span className="text-[11px] text-[color:var(--text-2)] tabular">
+              {isConnected ? `Wallet ${formatClawd(clawdBalance as bigint | undefined)}` : "—"}
             </span>
           </div>
           <div className="flex items-center justify-between gap-3">
-            <div className="text-3xl font-semibold opacity-50 tabular">0.00</div>
+            <div className="text-[32px] font-semibold text-[color:var(--text-3)] tabular">0.00</div>
             <div className="token-chip">
-              <span className="relative inline-block w-6 h-6 rounded-full overflow-hidden ring-1 ring-[color:var(--ink-orange-60)] bg-white">
+              <span className="relative inline-block w-6 h-6 rounded-full overflow-hidden ring-1 ring-[color:var(--clawd-line)] bg-white">
                 <Image src="/clawd-original.jpg" alt="CLAWD" fill sizes="24px" className="object-cover" />
               </span>
-              <span>CLAWD</span>
+              <span>Any token</span>
             </div>
           </div>
         </div>
@@ -138,71 +139,82 @@ const Home: NextPage = () => {
           </button>
         ) : (
           <Link href="/create" className="btn btn-primary btn-block btn-lg">
-            + New Position
+            New position →
           </Link>
         )}
 
-        <Link href="/stats" className="btn btn-ghost btn-block btn-sm">
-          View Engine Stats
-        </Link>
+        <div className="flex items-center justify-between text-[11px] text-[color:var(--text-3)] px-1 pt-1">
+          <span>Fees per swap</span>
+          <span className="tabular">10bps keeper · 10bps protocol · 10bps burn (30bps total)</span>
+        </div>
       </div>
 
-      <details className="rounded-2xl border border-[color:var(--ink-gray-40)] bg-base-100 overflow-hidden" open>
-        <summary className="cursor-pointer p-4 sm:p-5 font-semibold text-base flex items-center gap-2">
-          <span className="chip">How it works</span>
-          <span className="opacity-60 text-sm font-normal">3 steps</span>
-        </summary>
-        <ol className="list-decimal list-inside p-4 sm:p-5 pt-0 space-y-2 text-sm opacity-90">
-          <li>
-            <strong>Create a position.</strong> Deposit USDC and choose a strategy (every 3 hours, daily, weekly, or
-            custom).
-          </li>
-          <li>
-            <strong>Keepers do the work.</strong> Permissionless community keepers execute your DCA swaps on schedule.
-            They earn 0.39% per swap.
-          </li>
-          <li>
-            <strong>Withdraw any time.</strong> Pull out accumulated CLAWD whenever. Close the position to get any
-            remaining USDC + CLAWD.
-          </li>
-        </ol>
-      </details>
+      {/* how it works — 3 columns */}
+      <section className="grid sm:grid-cols-3 gap-3">
+        {[
+          {
+            n: "01",
+            t: "Deposit",
+            d: "Approve USDC and choose a cadence — every 3 hours, daily, weekly, or your call.",
+          },
+          {
+            n: "02",
+            t: "Keepers run it",
+            d: "Permissionless community keepers execute your DCA when each position is ripe.",
+          },
+          {
+            n: "03",
+            t: "Pull out anytime",
+            d: "Withdraw accumulated CLAWD whenever. Close to recover any remaining USDC + CLAWD.",
+          },
+        ].map(({ n, t, d }) => (
+          <div key={n} className="surface p-5 flex flex-col gap-2">
+            <span className="text-[11px] tabular text-[color:var(--clawd)] font-semibold tracking-[0.12em]">{n}</span>
+            <h3 className="text-base font-semibold tracking-tight">{t}</h3>
+            <p className="text-sm text-[color:var(--text-2)] leading-relaxed">{d}</p>
+          </div>
+        ))}
+      </section>
 
-      <section className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl sm:text-2xl font-bold my-0 tracking-tight">Your Positions</h2>
-          <Link href="/create" className="btn btn-primary btn-sm">
-            + New Position
+      {/* your positions */}
+      <section className="flex flex-col gap-5">
+        <div className="flex items-baseline justify-between gap-4">
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-2xl sm:text-3xl font-semibold tracking-[-0.025em]">Your positions</h2>
+            {isConnected && ids.length > 0 && (
+              <span className="text-sm text-[color:var(--text-2)] tabular">{ids.length} total</span>
+            )}
+          </div>
+          <Link href="/create" className="btn btn-soft btn-sm">
+            + New
           </Link>
         </div>
 
         {!isConnected && (
-          <div className="card">
-            <div className="card-body items-center text-center py-10">
-              <p className="opacity-70 my-0">Connect your wallet to see your DCA positions.</p>
-            </div>
+          <div className="surface p-10 flex flex-col items-center text-center gap-2">
+            <p className="text-[color:var(--text-1)]">Connect your wallet to see your DCA positions.</p>
           </div>
         )}
 
         {isConnected && isLoading && (
-          <div className="text-center opacity-70 py-6">
-            <span className="loading loading-spinner loading-md" />
+          <div className="flex flex-col gap-3">
+            <div className="shimmer h-32 w-full rounded-2xl" />
+            <div className="shimmer h-32 w-full rounded-2xl opacity-60" />
           </div>
         )}
 
         {isConnected && !isLoading && ids.length === 0 && (
-          <div className="card">
-            <div className="card-body items-center text-center gap-3 py-10">
-              <p className="opacity-70 my-0">No positions yet — create your first DCA position.</p>
-              <Link href="/create" className="btn btn-primary btn-sm">
-                Create Position
-              </Link>
-            </div>
+          <div className="surface p-10 flex flex-col items-center text-center gap-3">
+            <span className="text-3xl">🪙</span>
+            <p className="text-[color:var(--text-1)]">No positions yet — start your first DCA.</p>
+            <Link href="/create" className="btn btn-primary btn-sm">
+              Create position
+            </Link>
           </div>
         )}
 
         {isConnected && !isLoading && ids.length > 0 && (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             {ids.map(id => (
               <PositionCard key={id.toString()} positionId={id} />
             ))}

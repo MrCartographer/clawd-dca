@@ -2,34 +2,41 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Address as AddressComp } from "@scaffold-ui/components";
-import { parseUnits } from "viem";
 import { base } from "viem/chains";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { useScaffoldEventHistory, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useWriteAndOpen } from "~~/hooks/scaffold-eth/useWriteAndOpen";
 import {
+  CLAWDDCA_ADDRESS,
   DEPLOYED_ON_BLOCK,
-  MAX_SLIPPAGE_BPS,
-  USDC_DECIMALS,
   epochToDate,
   formatBps,
-  formatClawd,
   formatCountdown,
+  formatToken,
   formatUsdc,
   intervalLabel,
+  shortAddress,
 } from "~~/utils/dca";
 import { notification } from "~~/utils/scaffold-eth";
 
+// v3 position tuple: 10 fields (vs v2's 8). Order matches the ABI signature.
 type PositionTuple = readonly [
   `0x${string}`, // owner
+  `0x${string}`, // targetToken
+  `0x${string}`, // swapPath (bytes)
   bigint, // usdcBalance
-  bigint, // clawdAccrued
+  bigint, // tokenAccrued
   bigint, // amountPerSwap
   bigint, // intervalInEpochs
   bigint, // lastExecutedEpoch
   bigint, // slippageBps
   boolean, // active
 ];
+
+const erc20MetaAbi = [
+  { type: "function", name: "symbol", inputs: [], outputs: [{ type: "string" }], stateMutability: "view" },
+  { type: "function", name: "decimals", inputs: [], outputs: [{ type: "uint8" }], stateMutability: "view" },
+] as const;
 
 type PositionCardProps = {
   positionId: bigint;
@@ -66,21 +73,12 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
     watch: true,
   });
 
-  // Pull DCAExecuted + PositionToppedUp history so we can derive a true
-  // progress percentage. Initial deposit isn't stored on-chain, but accounting
-  // identity gives us: total_committed = current_balance + sum(usdcSpent). The
-  // progress bar shows fraction-spent of total ever committed to this position.
   const { data: executedEvents } = useScaffoldEventHistory({
     contractName: "CLAWDdca",
-    eventName: "DCAExecuted",
+    eventName: "PositionExecuted",
     fromBlock: DEPLOYED_ON_BLOCK,
     watch: true,
-  });
-  const { data: toppedUpEvents } = useScaffoldEventHistory({
-    contractName: "CLAWDdca",
-    eventName: "PositionToppedUp",
-    fromBlock: DEPLOYED_ON_BLOCK,
-    watch: true,
+    blocksBatchSize: 50_000,
   });
 
   const { writeContractAsync: writeDca } = useScaffoldWriteContract({
@@ -88,47 +86,62 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
   });
   const { writeAndOpen } = useWriteAndOpen();
 
-  const [topUpOpen, setTopUpOpen] = useState(false);
-  const [topUpAmount, setTopUpAmount] = useState("");
-  const [topUpBusy, setTopUpBusy] = useState(false);
   const [closeBusy, setCloseBusy] = useState(false);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
-  const [slippageBusy, setSlippageBusy] = useState(false);
-  const [slippageInput, setSlippageInput] = useState<string>("");
 
   const tuple = position as PositionTuple | undefined;
-
   const owner = tuple?.[0];
-  const usdcBalance = tuple?.[1];
-  const clawdAccrued = tuple?.[2];
-  const amountPerSwap = tuple?.[3];
-  const intervalInEpochs = tuple?.[4];
-  const lastExecutedEpoch = tuple?.[5];
-  const slippageBps = tuple?.[6];
-  const active = tuple?.[7];
+  const targetToken = tuple?.[1];
+  // tuple?.[2] is the swapPath bytes — useful for advanced display only
+  const usdcBalance = tuple?.[3];
+  const tokenAccrued = tuple?.[4];
+  const amountPerSwap = tuple?.[5];
+  const intervalInEpochs = tuple?.[6];
+  const lastExecutedEpoch = tuple?.[7];
+  const slippageBps = tuple?.[8];
+  const active = tuple?.[9];
+
+  // Resolve target token symbol + decimals
+  const tokenAddrValid = !!targetToken && targetToken !== "0x0000000000000000000000000000000000000000";
+  const { data: tokenSymbol } = useReadContract({
+    address: tokenAddrValid ? targetToken : undefined,
+    abi: erc20MetaAbi,
+    functionName: "symbol",
+    chainId: base.id,
+    query: { enabled: tokenAddrValid },
+  });
+  const { data: tokenDecimals } = useReadContract({
+    address: tokenAddrValid ? targetToken : undefined,
+    abi: erc20MetaAbi,
+    functionName: "decimals",
+    chainId: base.id,
+    query: { enabled: tokenAddrValid },
+  });
+  const decimalsNum = typeof tokenDecimals === "number" ? tokenDecimals : 18;
+  const symbol = (tokenSymbol as string | undefined) ?? "TOKEN";
 
   const isOwner = owner && connectedAddress && owner.toLowerCase() === connectedAddress.toLowerCase();
+  const hasToken = tokenAccrued !== undefined && tokenAccrued > 0n;
+  const fullySettled = active === false && (tokenAccrued ?? 0n) === 0n;
 
   const executionsRemaining = useMemo(() => {
     if (!usdcBalance || !amountPerSwap || amountPerSwap === 0n) return 0n;
     return usdcBalance / amountPerSwap;
   }, [usdcBalance, amountPerSwap]);
 
-  // total USDC swapped for THIS position (from DCAExecuted history) — used to
-  // derive a progress bar against total committed funds (balance + spent).
+  // total USDC swapped through THIS position so far (from PositionExecuted history)
   const totalUsdcSpent = useMemo(() => {
     if (!executedEvents) return 0n;
     let sum = 0n;
     for (const ev of executedEvents) {
-      const args = (ev as any).args as { positionId?: bigint; usdcSpent?: bigint } | undefined;
+      const args = (ev as any).args as { positionId?: bigint; amountSwapped?: bigint } | undefined;
       if (!args) continue;
       if (args.positionId !== positionId) continue;
-      if (typeof args.usdcSpent === "bigint") sum += args.usdcSpent;
+      if (typeof args.amountSwapped === "bigint") sum += args.amountSwapped;
     }
     return sum;
   }, [executedEvents, positionId]);
 
-  // For UX clarity: also surface executions completed so far.
   const executionsCompleted = useMemo(() => {
     if (!amountPerSwap || amountPerSwap === 0n) return 0n;
     return totalUsdcSpent / amountPerSwap;
@@ -139,31 +152,13 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
     return (usdcBalance as bigint) + totalUsdcSpent;
   }, [usdcBalance, totalUsdcSpent]);
 
-  // 0..100 — clamp to safe range; if nothing committed yet, show 0.
   const progressPct = useMemo(() => {
     if (totalCommitted === 0n) return 0;
-    // bigint-safe percent: (spent * 10000 / committed) gives basis points; / 100 → percent.
     const bp = (totalUsdcSpent * 10000n) / totalCommitted;
     const pct = Number(bp) / 100;
     if (Number.isNaN(pct)) return 0;
     return Math.min(100, Math.max(0, pct));
   }, [totalUsdcSpent, totalCommitted]);
-
-  // Visible only as supplementary info — silences unused-warning for toppedUpEvents
-  // while remaining available for future enhancements (e.g. distinguishing original
-  // deposit from later top-ups). Not used in the progress numerator.
-  const totalToppedUp = useMemo(() => {
-    if (!toppedUpEvents) return 0n;
-    let sum = 0n;
-    for (const ev of toppedUpEvents) {
-      const args = (ev as any).args as { positionId?: bigint; amount?: bigint } | undefined;
-      if (!args) continue;
-      if (args.positionId !== positionId) continue;
-      if (typeof args.amount === "bigint") sum += args.amount;
-    }
-    return sum;
-  }, [toppedUpEvents, positionId]);
-  void totalToppedUp;
 
   const nextExecutionDate = useMemo(() => {
     if (!currentEpoch || lastExecutedEpoch === undefined || intervalInEpochs === undefined) return null;
@@ -181,29 +176,20 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
     return Math.max(0, Math.floor((nextExecutionDate.getTime() - now) / 1000));
   }, [nextExecutionDate, now]);
 
-  const estimatedEndDate = useMemo(() => {
-    if (!currentEpoch || !intervalInEpochs || executionsRemaining === 0n || lastExecutedEpoch === undefined) {
-      return null;
-    }
-    // Final swap will land at lastExecutedEpoch + intervalInEpochs * executionsRemaining
-    const finalEpoch = lastExecutedEpoch + intervalInEpochs * executionsRemaining;
-    return epochToDate(currentEpoch, finalEpoch);
-  }, [currentEpoch, lastExecutedEpoch, intervalInEpochs, executionsRemaining]);
-
   const handleWithdraw = async () => {
     if (withdrawBusy) return;
     setWithdrawBusy(true);
     try {
+      await refetch();
       await writeAndOpen(() =>
         writeDca({
-          functionName: "withdrawCLAWD",
+          functionName: "withdrawToken",
           args: [positionId],
         }),
       );
-      notification.success(`Withdrew CLAWD from position #${positionId}`);
+      notification.success(`Withdrew ${symbol} from position #${positionId}`);
       refetch();
     } catch (e) {
-      // Error toast already fired by SE2 simulate-and-notify path.
       console.error(e);
     } finally {
       setWithdrawBusy(false);
@@ -212,7 +198,7 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
 
   const handleClose = async () => {
     if (closeBusy) return;
-    if (!confirm(`Close position #${positionId}? Remaining USDC and CLAWD will be returned to you.`)) {
+    if (!confirm(`Close position #${positionId}? Remaining USDC and ${symbol} will be returned to you.`)) {
       return;
     }
     setCloseBusy(true);
@@ -232,235 +218,133 @@ export const PositionCard = ({ positionId }: PositionCardProps) => {
     }
   };
 
-  const handleTopUp = async () => {
-    if (topUpBusy) return;
-    if (!topUpAmount || Number(topUpAmount) <= 0) {
-      notification.error("Enter a USDC amount > 0");
-      return;
-    }
-    setTopUpBusy(true);
-    try {
-      const amt = parseUnits(topUpAmount, USDC_DECIMALS);
-      await writeAndOpen(() =>
-        writeDca({
-          functionName: "topUpPosition",
-          args: [positionId, amt],
-        }),
-      );
-      notification.success(`Topped up position #${positionId}`);
-      setTopUpAmount("");
-      setTopUpOpen(false);
-      refetch();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setTopUpBusy(false);
-    }
-  };
-
-  const handleSlippage = async () => {
-    if (slippageBusy) return;
-    const pct = Number(slippageInput);
-    if (Number.isNaN(pct) || pct <= 0 || pct > 10) {
-      notification.error("Slippage must be > 0 and <= 10%");
-      return;
-    }
-    const bps = BigInt(Math.round(pct * 100));
-    if (bps > MAX_SLIPPAGE_BPS) {
-      notification.error("Slippage too high");
-      return;
-    }
-    setSlippageBusy(true);
-    try {
-      await writeAndOpen(() =>
-        writeDca({
-          functionName: "setSlippageTolerance",
-          args: [positionId, bps],
-        }),
-      );
-      notification.success(`Slippage updated for position #${positionId}`);
-      setSlippageInput("");
-      refetch();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSlippageBusy(false);
-    }
-  };
-
   if (!tuple) {
     return (
-      <div className="card">
-        <div className="card-body">
-          <span className="loading loading-spinner loading-sm" /> Loading position #{positionId.toString()}…
-        </div>
-      </div>
+      <div className="shimmer h-32 w-full rounded-2xl" aria-label={`Loading position #${positionId.toString()}`} />
     );
   }
 
+  const statusChip = (() => {
+    if (fullySettled) return <span className="chip chip-muted">Settled</span>;
+    if (!active) return <span className="chip chip-muted">Inactive</span>;
+    if (isRipe)
+      return (
+        <span className="chip chip-orange">
+          <span className="dot dot-pulse" /> Ripe
+        </span>
+      );
+    return (
+      <span className="chip chip-good">
+        <span className="dot" /> Active
+      </span>
+    );
+  })();
+
   return (
-    <div className="card">
-      <div className="card-body gap-4 p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <h3 className="text-lg sm:text-xl font-bold my-0 tracking-tight">Position #{positionId.toString()}</h3>
-            <span
-              className={`chip ${
-                active
-                  ? "!bg-[color:var(--ink-blue-10)] !text-[color:var(--ink-blue-70)] !border-[color:var(--ink-blue-30)]"
-                  : "!bg-[color:var(--ink-gray-10)] !text-[color:var(--ink-gray-80)] !border-[color:var(--ink-gray-40)]"
-              }`}
-            >
-              {active ? "Active" : "Inactive"}
-            </span>
-            {isRipe && active && (
-              <span className="chip !bg-[color:var(--ink-orange-10)] !text-[color:var(--ink-orange-60)] !border-[color:var(--ink-orange-60)]">
-                Ripe
-              </span>
-            )}
-          </div>
-          {!isOwner && owner && (
-            <div className="text-xs opacity-70 flex items-center gap-1">
-              owner:
-              <AddressComp address={owner} format="short" size="xs" chain={base} />
-            </div>
-          )}
+    <div className="surface-elev p-5 sm:p-6 flex flex-col gap-5">
+      {/* header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <h3 className="text-lg font-semibold tracking-tight">Position #{positionId.toString()}</h3>
+          {statusChip}
+          <span className="chip">→ {symbol}</span>
         </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm tabular">
-          <div>
-            <div className="opacity-60 text-[11px] uppercase tracking-wide">USDC remaining</div>
-            <div className="font-semibold text-base mt-0.5">${formatUsdc(usdcBalance)}</div>
-          </div>
-          <div>
-            <div className="opacity-60 text-[11px] uppercase tracking-wide">CLAWD accrued</div>
-            <div className="font-semibold text-base mt-0.5">{formatClawd(clawdAccrued)}</div>
-          </div>
-          <div>
-            <div className="opacity-60 text-[11px] uppercase tracking-wide">Amount per swap</div>
-            <div className="font-semibold text-base mt-0.5">${formatUsdc(amountPerSwap)}</div>
-          </div>
-          <div>
-            <div className="opacity-60 text-[11px] uppercase tracking-wide">Cadence</div>
-            <div className="font-semibold text-base mt-0.5">{intervalLabel(intervalInEpochs ?? 0n)}</div>
-          </div>
-          <div>
-            <div className="opacity-60 text-[11px] uppercase tracking-wide">Next execution</div>
-            <div className="font-semibold text-base mt-0.5">{active ? formatCountdown(countdownSeconds) : "—"}</div>
-          </div>
-          <div>
-            <div className="opacity-60 text-[11px] uppercase tracking-wide">Executions left</div>
-            <div className="font-semibold text-base mt-0.5">{executionsRemaining.toString()}</div>
-          </div>
-          <div>
-            <div className="opacity-60 text-[11px] uppercase tracking-wide">Estimated end</div>
-            <div className="font-semibold text-base mt-0.5">
-              {estimatedEndDate ? estimatedEndDate.toLocaleDateString() : "—"}
-            </div>
-          </div>
-          <div>
-            <div className="opacity-60 text-[11px] uppercase tracking-wide">Slippage</div>
-            <div className="font-semibold text-base mt-0.5">{formatBps(slippageBps)}</div>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between text-xs opacity-70">
-            <span>
-              Progress: {executionsCompleted.toString()} swap{executionsCompleted === 1n ? "" : "s"} done
-              {executionsRemaining > 0n ? `, ${executionsRemaining.toString()} to go` : ""}
-            </span>
-            <span className="tabular font-semibold">{progressPct.toFixed(1)}%</span>
-          </div>
-          <div className="w-full h-2 rounded-full bg-[color:var(--ink-gray-10)] overflow-hidden">
-            <div className="h-full bg-[color:var(--ink-blue-70)] transition-all" style={{ width: `${progressPct}%` }} />
-          </div>
-        </div>
-
-        {isOwner && (active || (clawdAccrued ?? 0n) > 0n) && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {clawdAccrued !== undefined && clawdAccrued > 0n && (
-              <button
-                className="btn btn-sm btn-primary"
-                disabled={withdrawBusy || wrongNetwork}
-                onClick={handleWithdraw}
-              >
-                {withdrawBusy ? <span className="loading loading-spinner loading-xs" /> : null}
-                Withdraw CLAWD
-              </button>
-            )}
-            {active && (
-              <>
-                <button
-                  className="btn btn-sm"
-                  disabled={topUpBusy || wrongNetwork}
-                  onClick={() => setTopUpOpen(prev => !prev)}
-                >
-                  Top Up USDC
-                </button>
-                <button
-                  className="btn btn-sm btn-error btn-outline"
-                  disabled={closeBusy || wrongNetwork}
-                  onClick={handleClose}
-                >
-                  {closeBusy ? <span className="loading loading-spinner loading-xs" /> : null}
-                  Close Position
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
-        {isOwner && active && topUpOpen && (
-          <div className="bg-[color:var(--ink-brown-10)] border border-[color:var(--ink-gray-40)] rounded-2xl p-4 flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[160px]">
-              <label className="text-xs opacity-70">USDC amount to top up</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={topUpAmount}
-                onChange={e => setTopUpAmount(e.target.value)}
-                placeholder="100.00"
-                className="input input-bordered input-sm w-full"
-              />
-            </div>
-            <button className="btn btn-sm btn-primary" disabled={topUpBusy || wrongNetwork} onClick={handleTopUp}>
-              {topUpBusy ? <span className="loading loading-spinner loading-xs" /> : null}
-              Top Up
-            </button>
-            <button className="btn btn-sm btn-ghost" disabled={topUpBusy} onClick={() => setTopUpOpen(false)}>
-              Cancel
-            </button>
-            <p className="text-xs opacity-60 w-full">
-              You must approve USDC to the DCA contract first if you haven&apos;t already (the call will revert
-              otherwise).
-            </p>
-          </div>
-        )}
-
-        {isOwner && active && (
-          <div className="bg-[color:var(--ink-brown-10)] border border-[color:var(--ink-gray-40)] rounded-2xl p-4 flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[160px]">
-              <label className="text-xs opacity-70">Adjust slippage (max 10%)</label>
-              <input
-                type="number"
-                min="0.01"
-                max="10"
-                step="0.01"
-                value={slippageInput}
-                onChange={e => setSlippageInput(e.target.value)}
-                placeholder={`current: ${formatBps(slippageBps)}`}
-                className="input input-bordered input-sm w-full"
-              />
-            </div>
-            <button className="btn btn-sm" disabled={slippageBusy || wrongNetwork} onClick={handleSlippage}>
-              {slippageBusy ? <span className="loading loading-spinner loading-xs" /> : null}
-              Save Slippage
-            </button>
+        {!isOwner && owner && (
+          <div className="text-xs text-[color:var(--text-2)] flex items-center gap-1.5">
+            <span>owner</span>
+            <AddressComp address={owner} format="short" size="xs" chain={base} />
           </div>
         )}
       </div>
+
+      {/* metrics grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 tabular">
+        <Metric label="USDC remaining" value={`$${formatUsdc(usdcBalance)}`} />
+        <Metric label={`${symbol} accrued`} value={formatToken(tokenAccrued, decimalsNum)} accent={hasToken} />
+        <Metric label="Per swap" value={`$${formatUsdc(amountPerSwap)}`} />
+        <Metric label="Cadence" value={intervalLabel(intervalInEpochs ?? 0n)} />
+        <Metric label="Next execution" value={active ? formatCountdown(countdownSeconds) : "—"} />
+        <Metric label="Executions left" value={executionsRemaining.toString()} />
+        <Metric label="Slippage" value={formatBps(slippageBps)} />
+        <Metric
+          label="Completed"
+          value={`${executionsCompleted.toString()} swap${executionsCompleted === 1n ? "" : "s"}`}
+        />
+      </div>
+
+      {/* target token address line */}
+      <div className="text-[11px] text-[color:var(--text-3)] flex items-center gap-2 -mt-2">
+        <span>Target</span>
+        <a href={`https://basescan.org/token/${targetToken}`} target="_blank" rel="noreferrer" className="link tabular">
+          {shortAddress(targetToken)}
+        </a>
+      </div>
+
+      {/* progress */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between text-xs text-[color:var(--text-2)]">
+          <span>Lifetime progress</span>
+          <span className="tabular font-medium text-[color:var(--text-1)]">{progressPct.toFixed(1)}%</span>
+        </div>
+        <div className="progress-track">
+          <div className="progress-bar" style={{ width: `${progressPct}%` }} />
+        </div>
+      </div>
+
+      {/* actions */}
+      {isOwner && !fullySettled && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            className="btn btn-sm btn-primary"
+            disabled={withdrawBusy || wrongNetwork || !hasToken}
+            onClick={handleWithdraw}
+            title={hasToken ? "" : `No ${symbol} accrued to withdraw`}
+          >
+            {withdrawBusy ? <span className="loading loading-spinner loading-xs" /> : null}
+            {hasToken ? `Withdraw ${formatToken(tokenAccrued, decimalsNum)} ${symbol}` : "Nothing to withdraw"}
+          </button>
+          {active && (
+            <button
+              className="btn btn-sm btn-ghost text-[color:var(--bad)]"
+              disabled={closeBusy || wrongNetwork}
+              onClick={handleClose}
+            >
+              {closeBusy ? <span className="loading loading-spinner loading-xs" /> : null}
+              Close
+            </button>
+          )}
+          {!active && hasToken && (
+            <a
+              href={`https://basescan.org/address/${CLAWDDCA_ADDRESS}#writeContract`}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-sm btn-ghost text-xs"
+              title="If the in-app withdraw fails for any reason, call withdrawToken directly on Basescan."
+            >
+              ↗ Withdraw on Basescan
+            </a>
+          )}
+        </div>
+      )}
+
+      {isOwner && fullySettled && (
+        <div className="text-xs text-[color:var(--text-2)] border-t border-[color:var(--line-soft)] pt-3">
+          This position is fully wound down — no USDC balance, no accrued {symbol}.
+        </div>
+      )}
     </div>
   );
 };
+
+const Metric = ({ label, value, accent }: { label: string; value: string; accent?: boolean }) => (
+  <div className="flex flex-col gap-0.5">
+    <span className="text-[10px] uppercase tracking-[0.1em] text-[color:var(--text-2)] font-medium">{label}</span>
+    <span
+      className={`text-[15px] font-semibold tabular ${
+        accent ? "text-[color:var(--clawd)]" : "text-[color:var(--text-0)]"
+      }`}
+    >
+      {value}
+    </span>
+  </div>
+);

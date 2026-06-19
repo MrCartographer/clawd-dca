@@ -1,0 +1,102 @@
+{
+  "schema_version": "0.1",
+  "name": "CLAWDdcaV3",
+  "version": "3.0.0",
+  "license": "MIT",
+  "chain": {
+    "name": "base",
+    "id": 8453
+  },
+  "address": "0xDB5Da5B9C55D5FC72EB19692aB41Aabbc46278AC",
+  "deployed_block": 46483901,
+  "abi_url": "/.well-known/clawd-dca-v3.abi.json",
+  "constants": {
+    "USDC": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "CLAWD": "0x9f86dB9fc6f7c9408e8Fda3Ff8ce4e78ac7a6b07",
+    "WETH": "0x4200000000000000000000000000000000000006",
+    "SWAP_ROUTER": "0x2626664c2603336E57B271c5C0b26F421741e481",
+    "QUOTER": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+    "BURN_ADDRESS": "0x000000000000000000000000000000000000dEaD",
+    "EPOCH_DURATION_SECONDS": 10800,
+    "KEEPER_FEE_BPS": 10,
+    "PROTOCOL_FEE_BPS": 10,
+    "BURN_FEE_BPS": 10,
+    "TOTAL_FEE_BPS": 30,
+    "DEFAULT_SLIPPAGE_BPS": 300,
+    "MAX_SLIPPAGE_BPS": 1000,
+    "BPS_DENOMINATOR": 10000,
+    "MIN_AMOUNT_PER_SWAP_USDC": "1000000"
+  },
+  "position_struct": {
+    "fields": [
+      { "name": "owner", "type": "address", "description": "Position owner — only this address can withdraw or close" },
+      { "name": "targetToken", "type": "address", "description": "ERC-20 the user is DCA'ing into" },
+      { "name": "swapPath", "type": "bytes", "description": "Encoded Uniswap V3 path USDC→...→targetToken" },
+      { "name": "usdcBalance", "type": "uint256", "description": "Remaining USDC to spend (6 decimals)" },
+      { "name": "tokenAccrued", "type": "uint256", "description": "Target token bought so far, awaiting withdraw" },
+      { "name": "amountPerSwap", "type": "uint256", "description": "USDC spent per execution (6 decimals)" },
+      { "name": "intervalInEpochs", "type": "uint256", "description": "Number of 3-hour epochs between executions" },
+      { "name": "lastExecutedEpoch", "type": "uint256", "description": "Epoch index of last execution" },
+      { "name": "slippageBps", "type": "uint256", "description": "Slippage tolerance applied to QuoterV2 output" },
+      { "name": "active", "type": "bool", "description": "False when usdcBalance == 0 or closePosition was called" }
+    ]
+  },
+  "events": {
+    "PositionCreated": {
+      "topic0": "0x...",
+      "params": [
+        { "name": "positionId", "type": "uint256", "indexed": true },
+        { "name": "owner", "type": "address", "indexed": true },
+        { "name": "targetToken", "type": "address", "indexed": true },
+        { "name": "totalUSDC", "type": "uint256" },
+        { "name": "amountPerSwap", "type": "uint256" },
+        { "name": "intervalInEpochs", "type": "uint256" },
+        { "name": "slippageBps", "type": "uint256" }
+      ]
+    },
+    "PositionExecuted": {
+      "params": [
+        { "name": "positionId", "type": "uint256", "indexed": true },
+        { "name": "keeper", "type": "address", "indexed": true },
+        { "name": "amountSwapped", "type": "uint256", "description": "Gross USDC including fees" },
+        { "name": "tokenReceived", "type": "uint256", "description": "Target token output from swap" },
+        { "name": "keeperFee", "type": "uint256", "description": "USDC paid to keeper (10 bps of amountSwapped)" },
+        { "name": "epoch", "type": "uint256", "description": "Epoch this execution landed in" }
+      ]
+    },
+    "BurnExecuted": {
+      "params": [
+        { "name": "executor", "type": "address", "indexed": true, "description": "Whoever called executeBurn" },
+        { "name": "usdcIn", "type": "uint256", "description": "USDC routed through the burn swap" },
+        { "name": "clawdBurned", "type": "uint256", "description": "CLAWD sent to 0xdead" }
+      ]
+    }
+  },
+  "errors": [
+    "InvalidAmount",
+    "InvalidInterval",
+    "InvalidPath",
+    "InvalidSlippage",
+    "PathTokenMismatch",
+    "InvalidTargetToken",
+    "NotPositionOwner",
+    "NotOwnerOrPositionOwner",
+    "PositionInactive",
+    "PositionNotRipe",
+    "InsufficientBalance",
+    "NothingToWithdraw",
+    "NothingToBurn",
+    "BurnPathNotSet",
+    "EmptyBatch"
+  ],
+  "notes": [
+    "Keeper fee is paid in USDC to msg.sender immediately on execute. Other fees accrue on-contract.",
+    "Burn fee always converts USDC→CLAWD via burnSwapPath (owner-configurable), regardless of position target.",
+    "executeBatch wraps each position in try/catch — a single failing position does not revert the batch.",
+    "createPositionViaWETH auto-builds the path; createPosition accepts a raw Uniswap V3 path for advanced flows.",
+    "Position IDs start at 0 and increment via nextPositionId++.",
+    "executeDCAWithMin is the sandwich-resistant path — callers pass a min-out computed off-chain. executeDCA falls back to QuoterV2 + slippage in-tx (not sandwich-safe; tolerates quoter failures with minOut=1).",
+    "closePosition is callable by the position owner OR the contract owner (emergency wind-down).",
+    "renounceOwnership is permanently disabled to prevent the contract from being orphaned."
+  ]
+}

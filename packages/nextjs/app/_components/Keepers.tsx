@@ -140,16 +140,7 @@ const KeepersPage: NextPage = () => {
     return positionRows.filter(p => (currentEpoch as bigint) >= p.lastExecutedEpoch + p.intervalInEpochs);
   }, [positionRows, currentEpoch]);
 
-  const totalKeeperReward = useMemo(() => {
-    let sum = 0n;
-    for (const p of ripePositions) {
-      sum += (p.amountPerSwap * KEEPER_FEE_BPS) / BPS_DENOMINATOR;
-    }
-    return sum;
-  }, [ripePositions]);
-
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [batchBusy, setBatchBusy] = useState(false);
 
   const handleExecute = async (positionId: bigint) => {
     setBusyId(positionId.toString());
@@ -166,26 +157,6 @@ const KeepersPage: NextPage = () => {
       notification.error(msg);
     } finally {
       setBusyId(null);
-    }
-  };
-
-  const handleExecuteAll = async () => {
-    if (ripePositions.length === 0) return;
-    setBatchBusy(true);
-    try {
-      const ids = ripePositions.map(p => p.positionId);
-      await writeAndOpen(() =>
-        writeDca({
-          functionName: "executeBatch",
-          args: [ids],
-        }),
-      );
-      notification.success(`Executed ${ids.length} ripe positions`);
-    } catch (e) {
-      const msg = getParsedErrorWithAllAbis(e, base.id);
-      notification.error(msg);
-    } finally {
-      setBatchBusy(false);
     }
   };
 
@@ -206,7 +177,10 @@ const KeepersPage: NextPage = () => {
             <h2 className="text-xl sm:text-2xl font-bold my-0 tracking-tight">
               Ripe Positions <span className="opacity-50 font-medium">({ripePositions.length})</span>
             </h2>
-            {isConnected && wrongNetwork ? (
+            {/* Batch execution (executeBatch) intentionally not exposed: the deployed v3 executeBatch
+                re-enters via an external self-call, so msg.sender becomes the contract and the keeper fee
+                is paid to the contract instead of the caller. Keepers execute positions individually below. */}
+            {isConnected && wrongNetwork && (
               <button
                 className="btn btn-warning btn-sm"
                 disabled={isSwitching}
@@ -214,15 +188,6 @@ const KeepersPage: NextPage = () => {
               >
                 {isSwitching ? <span className="loading loading-spinner loading-xs" /> : null}
                 Switch to Base
-              </button>
-            ) : (
-              <button
-                className="btn btn-primary btn-sm"
-                disabled={!isConnected || ripePositions.length === 0 || batchBusy}
-                onClick={handleExecuteAll}
-              >
-                {batchBusy ? <span className="loading loading-spinner loading-xs" /> : null}
-                Execute All Ripe (≈ ${formatUsdc(totalKeeperReward)} reward)
               </button>
             )}
           </div>
